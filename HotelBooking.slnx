@@ -1,0 +1,27 @@
+<Solution>
+  <Folder Name="/BookingService/" />
+  <Folder Name="/BookingService/Adapters/">
+    <Project Path="BookingService/Adapters/Data/Data.csproj" Id="b0d3845b-3a0d-4666-aab6-beb8de6e693e" />
+  </Folder>
+  <Folder Name="/BookingService/Consumers/">
+    <Project Path="BookingService/Consumers/API/API.csproj" Id="153d2363-370f-4011-b98f-3da21c1c397c" />
+  </Folder>
+  <Folder Name="/BookingService/Core/" />
+  <Folder Name="/BookingService/Core/Application/">
+    <Project Path="BookingService/Core/Application/Application.csproj" />
+  </Folder>
+  <Folder Name="/BookingService/Core/Domain/">
+    <Project Path="BookingService/Core/Domain/Domain.csproj" />
+  </Folder>
+  <Folder Name="/BookingService/Tests/" />
+  <Folder Name="/BookingService/Tests/Adapters/">
+    <Project Path="BookingService/Tests/Adapters/AdaptersTests/AdaptersTests.csproj" Id="e3f91762-17e1-4a85-8456-c5720fd07909" />
+  </Folder>
+  <Folder Name="/BookingService/Tests/Application/">
+    <Project Path="BookingService/Tests/Application/ApplicationTests/ApplicationTests.csproj" Id="3704e687-007d-4644-b1cc-ab6cf78ca40d" />
+  </Folder>
+  <Folder Name="/BookingService/Tests/Domain/">
+    <Project Path="BookingService/Tests/Domain/DomainTests/DomainTests.csproj" />
+  </Folder>
+  <Folder Name="/PaymentService/" />
+</Solution>
