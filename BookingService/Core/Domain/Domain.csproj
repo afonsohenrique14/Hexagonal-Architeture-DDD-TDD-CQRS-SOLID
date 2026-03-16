@@ -7,10 +7,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Folder Include="Events\" />
-    <Folder Include="Exceptions\" />
-    <Folder Include="Enums\" />
-    <Folder Include="ValueObjects\" />
+    <Folder Include="Booking\Ports\" />
+    <Folder Include="Guest\Events\" />
+    <Folder Include="Room\Exceptions\" />
+    <Folder Include="Room\Ports\" />
   </ItemGroup>
 
 </Project>

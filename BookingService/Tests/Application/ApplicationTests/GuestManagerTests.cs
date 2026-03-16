@@ -1,17 +1,17 @@
 ﻿using Application;
 using Application.Guest.DTOs;
+using Application.Guest.Mappings;
 using Application.Guest.Requests;
 using AutoMapper;
-using Domain.Entities;
-using Domain.Enums;
-using Domain.Ports;
-using Domain.ValueObjects;
+using Domain.Guest.Enums;
+using Domain.Guest.Ports;
+using Domain.Guest.ValueObjects;
 using Moq;
 
 namespace ApplicationTests
 {
 
-    public class Tests
+    public class GuestManagerTests
     {
         GuestManager _guestManager;
         int _createdGuestId = 111;
@@ -23,13 +23,13 @@ namespace ApplicationTests
 
             fakeRepository.Setup(
                 x => x.Create(
-                    It.IsAny<Guest>())
+                    It.IsAny<Domain.Guest.Entities.Guest>())
             ).Returns(
                 Task.FromResult(_createdGuestId)
             );
 
             fakeRepository.Setup(x => x.Get(_createdGuestId))
-              .ReturnsAsync(new Guest
+              .ReturnsAsync(new Domain.Guest.Entities.Guest
               {
                   Id = _createdGuestId,
                   Name = "John",
@@ -42,37 +42,16 @@ namespace ApplicationTests
                   }
               });
 
-            var mapperMock = new Mock<IMapper>();
-            mapperMock.Setup(
-                x => x.Map<Guest>(It.IsAny<GuestDTO>())
-            ).Returns( (GuestDTO dto) =>
-                new Guest
-                   { Name =dto.Name,
-                    Surname = dto.Surname,
-                    Email = dto.Email,
-                    DocumentId = new PersonId
-                    {
-                        IdNumber = dto.IdNumber,
-                        DocumentType = (DocumentTypes)dto.IdTypeCode
-                    }
-                }
-                
-            );
-
-            mapperMock
-            .Setup(x => x.Map<GuestDTO>(It.IsAny<Guest>()))
-            .Returns((Guest g) => new GuestDTO
+            var config = new MapperConfiguration(cfg =>
             {
-                Id = g.Id,
-                Name = g.Name,
-                Surname = g.Surname,
-                Email = g.Email,
-                IdNumber = g.DocumentId.IdNumber,
-                IdTypeCode = (int)g.DocumentId.DocumentType
+                cfg.AddProfile<CreateGuestProfile>();
+                cfg.AddProfile<ReturnGuestProfile>();
             });
 
+            var mapper = config.CreateMapper();
 
-            _guestManager = new GuestManager(fakeRepository.Object, mapperMock.Object);
+
+            _guestManager = new GuestManager(fakeRepository.Object, mapper);
         }
         
 
@@ -80,7 +59,7 @@ namespace ApplicationTests
         [Test]
         public async Task ShouldCreateGuest()
         {
-            var guestDTo = new GuestDTO
+            var guestDTo = new CreateGuestDTO
             {
                 Name = "John",
                 Surname = "Doe",
@@ -133,7 +112,7 @@ namespace ApplicationTests
             string? email
         )
         {
-            var guestDTo = new GuestDTO
+            var guestDTo = new CreateGuestDTO
             {
                 Name = name,
                 Surname = surname,

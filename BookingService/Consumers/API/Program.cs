@@ -1,8 +1,16 @@
 using Application;
+using Application.Booking;
+using Application.Booking.Ports;
 using Application.Ports;
+using Application.Room;
+using Application.Room.Ports;
 using Data;
+using Data.Booking;
 using Data.Guest;
-using Domain.Ports;
+using Data.Room;
+using Domain.Booking.Ports;
+using Domain.Guest.Ports;
+using Domain.Room.Ports;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -18,6 +26,10 @@ builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
 #region IoC
 builder.Services.AddScoped<IGuestManager, GuestManager>();
 builder.Services.AddScoped<IGuestRepository, GuestRepository>();
+builder.Services.AddScoped<IRoomManager, RoomManager>();
+builder.Services.AddScoped<IRoomRepository, RoomRepostory>();
+builder.Services.AddScoped<IBookingManager, BookingManager>();
+builder.Services.AddScoped<IBookingRepository, BookingRepository>();
 #endregion
 
 #region Database Context
@@ -52,3 +64,4 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+

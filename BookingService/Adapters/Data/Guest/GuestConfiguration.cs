@@ -1,7 +1,7 @@
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using Entities = Domain.Entities;
+using Entities = Domain.Guest.Entities;
 
 namespace Data;
 

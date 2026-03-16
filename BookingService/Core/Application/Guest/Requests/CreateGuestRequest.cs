@@ -4,5 +4,5 @@ namespace Application.Guest.Requests;
 
 public class CreateGuestRequest
 {
-     public GuestDTO Data {get; set;}= null!;
+     public CreateGuestDTO Data {get; set;}= null!;
 }

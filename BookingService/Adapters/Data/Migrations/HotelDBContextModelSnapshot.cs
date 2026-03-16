@@ -22,7 +22,7 @@ namespace Data.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("Domain.Entities.Booking", b =>
+            modelBuilder.Entity("Domain.Booking.Entities.Booking", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -45,6 +45,10 @@ namespace Data.Migrations
                     b.Property<DateTime>("Start")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.HasKey("Id");
 
                     b.HasIndex("GuestId");
@@ -54,7 +58,7 @@ namespace Data.Migrations
                     b.ToTable("Bookings");
                 });
 
-            modelBuilder.Entity("Domain.Entities.Guest", b =>
+            modelBuilder.Entity("Domain.Guest.Entities.Guest", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -79,7 +83,7 @@ namespace Data.Migrations
                     b.ToTable("Guests");
                 });
 
-            modelBuilder.Entity("Domain.Entities.Room", b =>
+            modelBuilder.Entity("Domain.Room.Entities.Room", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -102,16 +106,16 @@ namespace Data.Migrations
                     b.ToTable("Rooms");
                 });
 
-            modelBuilder.Entity("Domain.Entities.Booking", b =>
+            modelBuilder.Entity("Domain.Booking.Entities.Booking", b =>
                 {
-                    b.HasOne("Domain.Entities.Guest", "Guest")
-                        .WithMany()
+                    b.HasOne("Domain.Guest.Entities.Guest", "Guest")
+                        .WithMany("Bookings")
                         .HasForeignKey("GuestId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("Domain.Entities.Room", "Room")
-                        .WithMany()
+                    b.HasOne("Domain.Room.Entities.Room", "Room")
+                        .WithMany("Bookings")
                         .HasForeignKey("RoomId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -121,9 +125,9 @@ namespace Data.Migrations
                     b.Navigation("Room");
                 });
 
-            modelBuilder.Entity("Domain.Entities.Guest", b =>
+            modelBuilder.Entity("Domain.Guest.Entities.Guest", b =>
                 {
-                    b.OwnsOne("Domain.ValueObjects.PersonId", "DocumentId", b1 =>
+                    b.OwnsOne("Domain.Guest.ValueObjects.PersonId", "DocumentId", b1 =>
                         {
                             b1.Property<int>("GuestId")
                                 .HasColumnType("integer");
@@ -147,9 +151,9 @@ namespace Data.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("Domain.Entities.Room", b =>
+            modelBuilder.Entity("Domain.Room.Entities.Room", b =>
                 {
-                    b.OwnsOne("Domain.ValueObjects.Price", "Price", b1 =>
+                    b.OwnsOne("Domain.Guest.ValueObjects.Price", "Price", b1 =>
                         {
                             b1.Property<int>("RoomId")
                                 .HasColumnType("integer");
@@ -170,6 +174,16 @@ namespace Data.Migrations
 
                     b.Navigation("Price")
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Domain.Guest.Entities.Guest", b =>
+                {
+                    b.Navigation("Bookings");
+                });
+
+            modelBuilder.Entity("Domain.Room.Entities.Room", b =>
+                {
+                    b.Navigation("Bookings");
                 });
 #pragma warning restore 612, 618
         }

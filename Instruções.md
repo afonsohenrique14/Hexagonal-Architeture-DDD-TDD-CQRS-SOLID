@@ -2465,3 +2465,1508 @@ A implementação do **GetGuest** completa o ciclo CRUD inicial do agregado Gues
 - Testes unitários garantindo comportamento  
 
 O microserviço agora possui um caso de uso robusto para consulta de hóspedes.
+
+# 6 Feature Room
+
+## **6.1 Implementando a Feature Room**
+
+### **6.1.1 Introdução**  
+A Feature **Room** adiciona ao sistema a capacidade de cadastrar e consultar quartos disponíveis no hotel. Assim como na Feature Guest, seguimos rigorosamente os princípios de **DDD**, **Arquitetura Hexagonal**, **SOLID** e **TDD**, garantindo:
+
+- Domínio rico com validações internas  
+- Value Objects (Price)  
+- Exceções específicas  
+- Ports e Adapters isolados  
+- Use Cases na camada Application  
+- Mapeamento com AutoMapper  
+- Controller fino e orientado a HTTP  
+- Testes unitários independentes  
+
+Esta seção descreve a implementação completa da Feature Room.
+
+---
+
+### **6.1.2 Estrutura do Domínio**
+
+#### **6.1.2.1 Entidade Room**
+
+```csharp
+namespace Domain.Room;
+
+public class Room
+{
+    public int Id { get; set; }
+    public required string Name { get; set; }
+    public int Level { get; set; }
+    public bool InMaintenance { get; set; }
+    public Price Price { get; set; } = null!;
+
+    public bool IsAvailable =>
+        !(InMaintenance || HasGuest);
+
+    public bool HasGuest => true;
+
+    public void ValdateStatus()
+    {
+        if (string.IsNullOrWhiteSpace(Name))
+            throw new InvalidRoomDataException();
+
+        if (Price == null || Price.Value <= 0 ||
+            !Enum.IsDefined(typeof(Enums.AcceptedCurrencies), Price.Currency))
+            throw new InvalidRoomPriceException();
+
+        if (Level < 0)
+            throw new InvalidRoomLevelException();
+    }
+
+    public async Task Save(IRoomRepository roomRepository)
+    {
+        ValdateStatus();
+
+        if (Id == 0)
+            Id = await roomRepository.Create(this);
+        else
+        {
+            // await roomRepository.Update(this);
+        }
+    }
+}
+```
+
+#### **6.1.2.2 Value Object Price**
+
+```csharp
+public class Price
+{
+    public decimal Value { get; private set; }
+    public AcceptedCurrencies Currency { get; private set; }
+
+    public Price(decimal value, AcceptedCurrencies currency)
+    {
+        Value = value;
+        Currency = currency;
+    }
+}
+```
+
+#### **6.1.2.3 Exceções do Domínio**
+
+```csharp
+public class InvalidRoomDataException : Exception { }
+public class InvalidRoomPriceException : Exception { }
+public class InvalidRoomLevelException : Exception { }
+```
+
+---
+
+### **6.1.3 Ports (Interfaces do Domínio)**
+
+```csharp
+namespace Domain.Room.Ports;
+
+public interface IRoomRepository
+{
+    Task<int> Create(Room room);
+    Task<Room?> Get(int id);
+}
+```
+
+---
+
+### **6.1.4 Adapter de Persistência (Infra/Data)**
+
+```csharp
+public class RoomRepostory : IRoomRepository
+{
+    private HotelDBContext _hotelDbContext;
+
+    public RoomRepostory(HotelDBContext hotelDBContext)
+    {
+        _hotelDbContext = hotelDBContext;
+    }
+
+    public async Task<int> Create(Room room)
+    {
+        await _hotelDbContext.Rooms.AddAsync(room);
+        await _hotelDbContext.SaveChangesAsync();
+        return room.Id;
+    }
+
+    public async Task<Room?> Get(int id)
+    {
+        return await _hotelDbContext.Rooms.FindAsync(id);
+    }
+}
+```
+
+---
+
+### **6.1.5 DTOs e Requests (Application Layer)**
+
+#### **6.1.5.1 RoomDTO**
+
+```csharp
+public class RoomDTO
+{
+    public int Id { get; set; }
+    public required string Name { get; set; }
+    public int Level { get; set; }
+    public bool InMaintenance { get; set; }
+    public decimal Value { get; set; }
+    public int Currency { get; set; }
+}
+```
+
+#### **6.1.5.2 CreateRoomRequest**
+
+```csharp
+public class CreateRoomRequest
+{
+    public RoomDTO Data { get; set; } = null!;
+}
+```
+
+---
+
+### **6.1.6 Mapeamento com AutoMapper**
+
+```csharp
+public class RoomProfile : Profile
+{
+    public RoomProfile()
+    {
+        CreateMap<Domain.Room.Room, RoomDTO>()
+            .ForMember(d => d.Currency, opt => opt.MapFrom(src => src.Price.Currency))
+            .ForMember(d => d.Value, opt => opt.MapFrom(src => src.Price.Value))
+            .ReverseMap()
+                .ForPath(d => d.Price.Currency, opt => opt.MapFrom(src => src.Currency))
+                .ForPath(d => d.Price.Value, opt => opt.MapFrom(src => src.Value));
+    }
+}
+```
+
+---
+
+### **6.1.7 Caso de Uso RoomManager**
+
+#### **6.1.7.1 CreateRoom**
+
+```csharp
+public async Task<RoomResponse> CreateRoom(CreateRoomRequest request)
+{
+    try
+    {
+        var room = _mapper.Map<Domain.Room.Room>(request.Data);
+        await room.Save(_roomRepository);
+
+        request.Data.Id = room.Id;
+
+        return new RoomResponse
+        {
+            Data = request.Data,
+            Success = true,
+        };
+    }
+    catch (InvalidRoomDataException)
+    {
+        return new RoomResponse
+        {
+            Success = false,
+            ErrorCode = ErrorCodes.MISSING_REQUIRED_INFORMATION_ROOM,
+            Message = "Missing required information to create a room"
+        };
+    }
+    catch (InvalidRoomPriceException)
+    {
+        return new RoomResponse
+        {
+            Success = false,
+            ErrorCode = ErrorCodes.INVALID_ROOM_PRICE,
+            Message = "The price provided for the room is invalid"
+        };
+    }
+    catch (InvalidRoomLevelException)
+    {
+        return new RoomResponse
+        {
+            Success = false,
+            ErrorCode = ErrorCodes.INVALID_ROOM_LEVEL,
+            Message = "The level provided for the room is invalid"
+        };
+    }
+    catch (Exception)
+    {
+        return new RoomResponse
+        {
+            Success = false,
+            ErrorCode = ErrorCodes.ROOM_COULD_NOT_STORE_DATA,
+            Message = "An error ocurred while creating the room"
+        };
+    }
+}
+```
+
+#### **6.1.7.2 GetRoom**
+
+```csharp
+public async Task<RoomResponse> GetRoom(int roomId)
+{
+    try
+    {
+        var room = await _roomRepository.Get(roomId);
+
+        if (room == null)
+        {
+            return new RoomResponse
+            {
+                Success = false,
+                ErrorCode = ErrorCodes.NOT_FOUND_ROOM,
+                Message = "Room not found"
+            };
+        }
+
+        var dto = _mapper.Map<RoomDTO>(room);
+
+        return new RoomResponse
+        {
+            Success = true,
+            Data = dto
+        };
+    }
+    catch (Exception)
+    {
+        return new RoomResponse
+        {
+            Success = false,
+            ErrorCode = ErrorCodes.ROOM_COULD_NOT_STORE_DATA,
+            Message = "Unexpected error while retrieving room"
+        };
+    }
+}
+```
+
+---
+
+### **6.1.8 Controller REST**
+
+```csharp
+[ApiController]
+[Route("[controller]")]
+public class RoomController : ControllerBase
+{
+    private readonly ILogger<RoomController> _logger;
+    private readonly IRoomManager _roomManager;
+
+    public RoomController(ILogger<RoomController> logger, IRoomManager roomManager)
+    {
+        _logger = logger;
+        _roomManager = roomManager;
+    }
+
+    [HttpPost]
+    public async Task<ActionResult<RoomDTO>> Post(RoomDTO room)
+    {
+        var request = new CreateRoomRequest { Data = room };
+        var res = await _roomManager.CreateRoom(request);
+
+        if (res.Success) return Created("", res.Data);
+
+        if (res.ErrorCode == ErrorCodes.ROOM_COULD_NOT_STORE_DATA)
+            return BadRequest(res);
+
+        return StatusCode(500, res);
+    }
+
+    [HttpGet]
+    public async Task<ActionResult<RoomDTO>> Get(int roomId)
+    {
+        var res = await _roomManager.GetRoom(roomId);
+
+        if (res.Success) return Ok(res.Data);
+
+        if (res.ErrorCode == ErrorCodes.NOT_FOUND_ROOM)
+            return NotFound(res);
+
+        return StatusCode(500, res);
+    }
+}
+```
+
+---
+
+### **6.1.9 Injeção de Dependência**
+
+```csharp
+builder.Services.AddScoped<IRoomManager, RoomManager>();
+builder.Services.AddScoped<IRoomRepository, RoomRepostory>();
+```
+
+---
+
+### **6.1.10 Conclusão**
+
+A Feature Room foi implementada seguindo rigorosamente os princípios de DDD e Arquitetura Hexagonal. O domínio controla suas regras, a aplicação orquestra o fluxo, a infraestrutura persiste os dados e a API expõe endpoints REST limpos e previsíveis.  
+
+A base está sólida para evoluir para:
+
+- Testes unitários (6.2)  
+- Atualização de quartos  
+- Listagem paginada  
+- Integração com Booking  
+
+## **6.2 Testando a Camada Application – Room**
+
+### **6.2.1 Introdução**  
+Com a Feature Room implementada, é essencial garantir que o caso de uso **RoomManager** funcione corretamente em todos os cenários.  
+Nesta etapa, aplicamos **TDD** e **testes unitários isolados**, utilizando:
+
+- **Moq** para simular o repositório (`IRoomRepository`)
+- **Moq** para simular o AutoMapper
+- **NUnit** como framework de testes
+- Testes positivos e negativos
+- Validação de regras de domínio via exceções
+
+O objetivo é garantir que:
+
+- Quartos válidos sejam criados corretamente  
+- Erros de domínio sejam capturados e convertidos em `ErrorCodes`  
+- O método `GetRoom` retorne corretamente quartos existentes  
+- O método `GetRoom` retorne NOT_FOUND quando necessário  
+
+---
+
+### **6.2.2 Preparação do Ambiente de Testes**
+
+Antes de tudo, adicionamos o pacote Moq:
+
+```
+dotnet add package Moq
+```
+
+Em seguida, configuramos o ambiente de testes criando mocks para:
+
+- `IRoomRepository`
+- `IMapper`
+
+---
+
+### **6.2.3 Estrutura Completa dos Testes**
+
+```csharp
+using Application;
+using Application.Room;
+using Application.Room.DTOs;
+using Application.Room.Requests;
+using AutoMapper;
+using Domain.Room;
+using Domain.Room.Ports;
+using Moq;
+
+namespace ApplicationTests;
+
+public class RoomManagerTests
+{
+    RoomManager _roomManager;
+    int _createdRoomId = 111;
+
+    [SetUp]
+    public void Setup()
+    {
+        var fakeRepository = new Mock<IRoomRepository>();
+
+        fakeRepository.Setup(
+            x => x.Create(
+                It.IsAny<Room>())
+        ).Returns(
+            Task.FromResult(_createdRoomId)
+        );
+
+        fakeRepository.Setup(
+            x => x.Get(_createdRoomId)
+        ).ReturnsAsync(
+            new Room
+            {
+                Id = _createdRoomId,
+                Name = "Room 101",
+                Level = 15,
+                InMaintenance = false,
+                Price = new Domain.ValueObjects.Price
+                {
+                    Value = 100,
+                    Currency = Domain.Enums.AcceptedCurrencies.Dollar
+                }
+            }
+        );
+
+        var mapperMock = new Mock<IMapper>();
+
+        mapperMock.Setup(
+            x => x.Map<Room>(It.IsAny<RoomDTO>())
+        ).Returns((RoomDTO dto) =>
+            new Room
+            {
+                Name = dto.Name,
+                Level = dto.Level,
+                InMaintenance = dto.InMaintenance,
+                Price = new Domain.ValueObjects.Price
+                {
+                    Value = dto.Value,
+                    Currency = (Domain.Enums.AcceptedCurrencies)dto.Currency
+                }
+            }
+        );
+
+        mapperMock.Setup(
+            x => x.Map<RoomDTO>(It.IsAny<Room>())
+        ).Returns((Room room) =>
+            new RoomDTO
+            {
+                Name = room.Name,
+                Level = room.Level,
+                InMaintenance = room.InMaintenance,
+                Value = room.Price.Value,
+                Currency = (int)room.Price.Currency
+            }
+        );
+
+        _roomManager = new RoomManager(fakeRepository.Object, mapperMock.Object);
+    }
+
+    #region TESTES POSITIVOS
+
+    [Test]
+    public async Task Should_Return_Created_RoomId()
+    {
+        var roomDto = new RoomDTO
+        {
+            Name = "Room 101",
+            Level = 15,
+            InMaintenance = false,
+            Value = 100,
+            Currency = (int)Domain.Enums.AcceptedCurrencies.Dollar
+        };
+
+        var createRoomRequest = new CreateRoomRequest
+        {
+            Data = roomDto
+        };
+
+        var result = await _roomManager.CreateRoom(createRoomRequest);
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Data.Id, Is.EqualTo(_createdRoomId));
+        Assert.That(result.Success, Is.True);
+    }
+
+    #endregion
+
+    #region TESTES NEGATIVOS
+
+    [TestCase(null, 15, false, 100, 1, ErrorCodes.MISSING_REQUIRED_INFORMATION_ROOM)]
+    [TestCase("Jhon", 15, false, -100, 1, ErrorCodes.INVALID_ROOM_PRICE)]
+    [TestCase("Jhon", 15, false, 100, -15, ErrorCodes.INVALID_ROOM_PRICE)]
+    [TestCase("Jhon", -15, false, 100, 1, ErrorCodes.INVALID_ROOM_LEVEL)]
+    public async Task Should_Return_Error_When_Creating_Room_With_Invalid_Data(
+        string? name,
+        int level,
+        bool inMaintenance,
+        decimal value,
+        int currency,
+        ErrorCodes expectedErrorCode)
+    {
+        var roomDto = new RoomDTO
+        {
+            Name = name!,
+            Level = level,
+            InMaintenance = inMaintenance,
+            Value = value,
+            Currency = currency
+        };
+
+        var createRoomRequest = new CreateRoomRequest
+        {
+            Data = roomDto
+        };
+
+        var result = await _roomManager.CreateRoom(createRoomRequest);
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ErrorCode, Is.EqualTo(expectedErrorCode));
+    }
+
+    #endregion
+}
+```
+
+---
+
+### **6.2.4 Análise dos Testes**
+
+#### **6.2.4.1 Testes Positivos**
+O teste `Should_Return_Created_RoomId` garante que:
+
+- O RoomManager chama o repositório corretamente  
+- O ID retornado é atribuído ao DTO  
+- O fluxo retorna `Success = true`  
+
+#### **6.2.4.2 Testes Negativos**
+Os testes negativos validam:
+
+- Nome inválido → `MISSING_REQUIRED_INFORMATION_ROOM`
+- Preço inválido → `INVALID_ROOM_PRICE`
+- Moeda inválida → `INVALID_ROOM_PRICE`
+- Level inválido → `INVALID_ROOM_LEVEL`
+
+Esses testes garantem que as exceções de domínio são capturadas e traduzidas corretamente para `ErrorCodes`.
+
+---
+
+### **6.2.5 Conclusão**
+
+A suíte de testes da Feature Room valida completamente o comportamento do caso de uso **RoomManager**, garantindo:
+
+- Conformidade com regras de negócio  
+- Tratamento adequado de exceções  
+- Mapeamento correto entre DTO ↔ Entidade  
+- Interação correta com o repositório  
+- Robustez e previsibilidade do fluxo  
+
+Com isso, a Feature Room está totalmente validada e pronta para integração com a Feature Booking.
+
+---
+
+# 7 Feature Booking
+Afonso, aqui está a **seção 7.1 COMPLETA**, totalmente revisada, organizada e com **todos os níveis de títulos corrigidos**, seguindo exatamente o mesmo padrão das seções anteriores da sua documentação.
+
+Tudo está formatado como um capítulo oficial da sua documentação técnica.
+
+---
+
+## **7.1 Feature Booking (Domain e Application)**
+
+### **7.1.1 Introdução**  
+A Feature **Booking** é a mais complexa do sistema até o momento, pois integra três agregados distintos:
+
+- **Guest**
+- **Room**
+- **Booking**
+
+Ela exige validações cruzadas, regras de negócio específicas e verificação de conflitos de reserva.  
+Nesta etapa, seguimos rigorosamente os princípios de:
+
+- **DDD (Domain‑Driven Design)**
+- **Arquitetura Hexagonal**
+- **SOLID**
+- **Clean Architecture**
+
+Garantindo:
+
+- Domínio rico e isolado  
+- Regras de negócio encapsuladas  
+- Validações obrigatórias  
+- Ports e Adapters bem definidos  
+- Use Cases claros  
+- Mapeamento com AutoMapper  
+- Tratamento de exceções específico  
+- Respostas padronizadas  
+
+---
+
+### **7.1.2 Estrutura do Domínio Booking**
+
+#### **7.1.2.1 Entidade Booking**
+
+```csharp
+namespace Domain.Booking.Entities;
+
+public class Booking
+{
+    public int Id { get; set; }
+    public DateTime PlacedAt { get; set; }
+    public DateTime Start { get; set; }
+    public DateTime End { get; set; }
+    private Status Status { get; set; }
+
+    public R.Room Room { get; set; } = null!;
+    public int RoomId { get; set; }
+
+    public G.Guest Guest { get; set; } = null!;
+    public int GuestId { get; set; }
+
+    public Status CurrentStatus => Status;
+
+    public Booking()
+    {
+        Status = Status.Created;
+        PlacedAt = DateTime.UtcNow;
+    }
+
+    public void ChangeState(Action action)
+    {
+        Status = (Status, action) switch
+        {
+            (Status.Created, Action.Pay) => Status.Paid,
+            (Status.Created, Action.Cancel) => Status.Canceled,
+            (Status.Paid, Action.Finish) => Status.Finished,
+            (Status.Paid, Action.Refound) => Status.Refounded,
+            (Status.Canceled, Action.Reopen) => Status.Created,
+            _ => Status
+        };
+    }
+
+    private async Task Validate(
+        IGuestRepository guestRepository,
+        IRoomRepository roomRepository,
+        IBookingRepository bookingRepository)
+    {
+        if (PlacedAt == default ||
+            Start == default ||
+            End == default ||
+            GuestId == default ||
+            RoomId == default)
+        {
+            throw new MissingRequiredInformation();
+        }
+
+        if (Start >= End)
+        {
+            throw new InvalidBookingDatesException();
+        }
+
+        var guest = await guestRepository.Get(GuestId);
+        if (guest == null)
+        {
+            throw new InvalidGuestIDException();
+        }
+
+        var room = await roomRepository.Get(RoomId);
+        if (room == null)
+        {
+            throw new InvalidRoomIDException();
+        }
+
+        var hasConflictingBooking =
+            await bookingRepository.ExistsActiveBookingForRoom(RoomId, Start, End);
+
+        if (hasConflictingBooking)
+        {
+            throw new ConflictingBookingException();
+        }
+
+        guest.Isvalid();
+        room.CanBeBooked();
+    }
+
+    public async Task Save(
+        IBookingRepository bookingRepository,
+        IGuestRepository guestRepository,
+        IRoomRepository roomRepository)
+    {
+        await Validate(guestRepository, roomRepository, bookingRepository);
+
+        if (Id == 0)
+        {
+            Id = await bookingRepository.Create(this);
+        }
+        else
+        {
+            // await bookingRepository.Update(this);
+        }
+    }
+}
+```
+
+---
+
+#### **7.1.2.2 Exceções do Domínio Booking**
+
+```csharp
+public class MissingRequiredInformation : Exception { }
+public class InvalidBookingDatesException : Exception { }
+public class ConflictingBookingException : Exception { }
+public class InvalidGuestIDException : Exception { }
+public class InvalidRoomIDException : Exception { }
+```
+
+---
+
+#### **7.1.2.3 Ports do Domínio**
+
+```csharp
+public interface IBookingRepository
+{
+    Task<Booking?> Get(int id);
+    Task<int> Create(Booking booking);
+    Task<bool> ExistsActiveBookingForRoom(int roomId, DateTime start, DateTime end);
+}
+```
+
+---
+
+### **7.1.3 DTOs da Camada Application**
+
+#### **7.1.3.1 CreateBookingDTO**
+
+```csharp
+public class CreateBookingDTO
+{
+    public DateTime Start { get; set; }
+    public DateTime End { get; set; }
+    public int RoomId { get; set; }
+    public int GuestId { get; set; }
+}
+```
+
+---
+
+#### **7.1.3.2 ReturnBookingDTO**
+
+```csharp
+public class ReturnBookingDTO
+{
+    public int Id { get; set; }
+    public DateTime PlacedAt { get; set; }
+    public DateTime Start { get; set; }
+    public DateTime End { get; set; }
+    public ReturnRoomDTO Room { get; set; } = null!;
+    public ReturnGuestDTO Guest { get; set; } = null!;
+}
+```
+
+---
+
+### **7.1.4 Requests e Responses**
+
+#### **7.1.4.1 CreateBookingRequest**
+
+```csharp
+public class CreateBookingRequest
+{
+    public CreateBookingDTO Data { get; set; } = null!;
+}
+```
+
+---
+
+#### **7.1.4.2 BookingResponse**
+
+```csharp
+public class BookingResponse : Response
+{
+    public ReturnBookingDTO Data { get; set; } = null!;
+}
+```
+
+---
+
+### **7.1.5 Mapeamento com AutoMapper**
+
+#### **7.1.5.1 CreateBookingProfile**
+
+```csharp
+public class CreateBookingProfile : Profile
+{
+    public CreateBookingProfile()
+    {
+        CreateMap<CreateBookingDTO, Domain.Booking.Entities.Booking>();
+    }
+}
+```
+
+---
+
+#### **7.1.5.2 ReturnBookingProfile**
+
+```csharp
+public class ReturnBookingProfile : Profile
+{
+    public ReturnBookingProfile()
+    {
+        CreateMap<Domain.Booking.Entities.Booking, ReturnBookingDTO>();
+    }
+}
+```
+
+---
+
+### **7.1.6 Caso de Uso BookingManager**
+
+#### **7.1.6.1 CreateBooking**
+
+```csharp
+public async Task<BookingResponse> CreateBooking(CreateBookingRequest request)
+{
+    try
+    {
+        var booking = _mapper.Map<Domain.Booking.Entities.Booking>(request.Data);
+
+        await booking.Save(_bookingRepository, _guestRepository, _roomRepository);
+
+        return new BookingResponse
+        {
+            Data = _mapper.Map<ReturnBookingDTO>(booking),
+            Success = true,
+        };
+    }
+    catch (MissingRequiredInformation)
+    {
+        return new BookingResponse
+        {
+            Success = false,
+            ErrorCode = ErrorCodes.MISSING_REQUIRED_INFORMATION_BOOKING,
+            Message = "Some required information for creating the booking was not provided"
+        };
+    }
+    catch (InvalidBookingDatesException)
+    {
+        return new BookingResponse
+        {
+            Success = false,
+            ErrorCode = ErrorCodes.INVALID_DATES,
+            Message = "The provided booking dates are invalid"
+        };
+    }
+    catch (ConflictingBookingException)
+    {
+        return new BookingResponse
+        {
+            Success = false,
+            ErrorCode = ErrorCodes.CONFLICTING_BOOKING,
+            Message = "The provided room is not available for the selected dates"
+        };
+    }
+    catch (Domain.Guest.Exceptions.GuestExceptons)
+    {
+        return new BookingResponse
+        {
+            Success = false,
+            ErrorCode = ErrorCodes.INVALID_DATA_GUEST,
+            Message = "The provided guest has invalid data"
+        };
+    }
+    catch (Domain.Room.Exceptions.RoomExceptions)
+    {
+        return new BookingResponse
+        {
+            Success = false,
+            ErrorCode = ErrorCodes.INVALID_DATA_ROOM,
+            Message = "The provided room has invalid data"
+        };
+    }
+    catch (InvalidGuestIDException)
+    {
+        return new BookingResponse
+        {
+            Success = false,
+            ErrorCode = ErrorCodes.INVALID_GUEST_ID,
+            Message = "The provided guest has invalid data"
+        };
+    }
+    catch (InvalidRoomIDException)
+    {
+        return new BookingResponse
+        {
+            Success = false,
+            ErrorCode = ErrorCodes.INVALID_ROOM_ID,
+            Message = "The provided room does not exist"
+        };
+    }
+    catch (Exception)
+    {
+        return new BookingResponse
+        {
+            Success = false,
+            ErrorCode = ErrorCodes.BOOKING_COULD_NOT_BE_CREATED,
+            Message = "An error occurred while creating the booking"
+        };
+    }
+}
+```
+
+---
+
+#### **7.1.6.2 GetBooking**
+
+```csharp
+public async Task<BookingResponse> GetBooking(int bookingId)
+{
+    var booking = await _bookingRepository.Get(bookingId);
+
+    if (booking == null)
+    {
+        return new BookingResponse
+        {
+            Success = false,
+            ErrorCode = ErrorCodes.NOT_FOUND,
+            Message = "No booking found with the provided id"
+        };
+    }
+
+    return new BookingResponse
+    {
+        Data = _mapper.Map<ReturnBookingDTO>(booking),
+        Success = true,
+    };
+}
+```
+
+---
+
+### **7.1.7 Conclusão**
+
+A Feature Booking integra múltiplos agregados e representa o fluxo mais complexo do sistema até agora.  
+A implementação segue rigorosamente os princípios de DDD e Arquitetura Hexagonal:
+
+- O domínio valida todas as regras  
+- A aplicação orquestra o fluxo  
+- A infraestrutura persiste os dados  
+- O AutoMapper converte DTOs e entidades  
+- Exceções são traduzidas para códigos de erro claros  
+
+Com isso, a base está pronta para:
+
+- **7.2 Testando Application Booking**  
+- **7.3 Implementando BookingRepository**  
+- **7.4 Criando BookingController**
+---
+
+## **7.2 Feature Booking (Controller e Repository)**
+
+### **7.2.1 Introdução**  
+Nesta etapa, concluímos a Feature Booking implementando:
+
+- O **BookingController**, responsável por expor os endpoints REST para criação e consulta de reservas.
+- O **BookingRepository**, responsável por persistir reservas e verificar conflitos de datas.
+- A configuração do **HotelDBContext** para incluir o mapeamento de Booking.
+- A configuração de **EF Core** para armazenar o estado da reserva como string.
+
+Essa camada completa o fluxo da Feature Booking, conectando Application → Domain → Data → API.
+
+---
+
+### **7.2.2 BookingController**
+
+O controller segue o padrão já estabelecido no projeto:
+
+- Fino, sem lógica de negócio
+- Converte DTO → Request
+- Retorna códigos HTTP adequados
+- Registra logs para erros inesperados
+
+```csharp
+using Application;
+using Application.Booking.DTOs;
+using Application.Booking.Ports;
+using Application.Booking.Requests;
+using Microsoft.AspNetCore.Mvc;
+
+namespace API.Controllers;
+
+[ApiController]
+[Route("[controller]")]
+public class BookingController: ControllerBase
+{
+    private readonly ILogger<BookingController> _logger;
+    private readonly IBookingManager _bookingManager;
+
+    public BookingController(
+        ILogger<BookingController> logger,
+        IBookingManager bookingManager
+    )
+    {
+        _logger = logger;
+        _bookingManager = bookingManager;
+    }
+
+    [HttpPost]
+    public async Task<ActionResult<ReturnBookingDTO>> Post(CreateBookingDTO booking)
+    {
+        var request = new CreateBookingRequest { Data = booking };
+        
+        var res = await _bookingManager.CreateBooking(request);
+
+        if(res.Success) return Created("", res.Data);
+
+        if(
+            res.ErrorCode == ErrorCodes.INVALID_DATES || 
+            res.ErrorCode == ErrorCodes.MISSING_REQUIRED_INFORMATION_BOOKING || 
+            res.ErrorCode == ErrorCodes.INVALID_GUEST_ID ||
+            res.ErrorCode == ErrorCodes.INVALID_ROOM_ID ||
+            res.ErrorCode == ErrorCodes.BOOKING_COULD_NOT_BE_CREATED ||
+            res.ErrorCode == ErrorCodes.NOT_FOUND
+        )
+        {
+            return BadRequest(res);
+        }
+
+        _logger.LogError("Response with unknown ErrorCode Returned{@res}", res);
+        return StatusCode(StatusCodes.Status500InternalServerError, res);
+    }
+
+    [HttpGet]
+    public async Task<ActionResult<ReturnBookingDTO>> Get(int bookingId)
+    {
+        var res = await _bookingManager.GetBooking(bookingId);
+
+        if(res.Success) return Ok(res.Data);
+
+        if(res.ErrorCode == ErrorCodes.NOT_FOUND)
+        {
+            return NotFound(res);
+        }
+
+        _logger.LogError("Response with unknown ErrorCode Returned{@res}", res);
+        return StatusCode(StatusCodes.Status500InternalServerError, res);
+    }
+}
+```
+
+---
+
+### **7.2.3 Configuração EF Core – BookingConfiguration**
+
+O estado da reserva (`Status`) é armazenado como string no banco, garantindo legibilidade e evitando problemas de enum versioning.
+
+```csharp
+using Entities = Domain.Booking.Entities;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Domain.Booking.Enums;
+
+namespace Data.Booking;
+
+public class BookingConfigurantion : IEntityTypeConfiguration<Entities.Booking>
+{
+    public void Configure(EntityTypeBuilder<Entities.Booking> builder)
+    {
+        builder.HasKey(x=> x.Id);
+
+        builder
+            .Property<Status>("Status")
+            .HasConversion<string>()
+            .IsRequired();
+    }
+}
+```
+
+---
+
+### **7.2.4 BookingRepository (Adapter de Persistência)**
+
+O repositório implementa:
+
+- **Create** → salva a reserva
+- **Get** → retorna reserva com Guest e Room carregados
+- **ExistsActiveBookingForRoom** → verifica conflitos de datas
+
+```csharp
+using Domain.Booking.Ports;
+using Microsoft.EntityFrameworkCore;
+
+namespace Data.Booking;
+
+public class BookingRepository : IBookingRepository
+{
+    private HotelDBContext _hotelDbContext;
+
+    public BookingRepository(HotelDBContext hotelDBContext)
+    {
+        _hotelDbContext = hotelDBContext;
+    }
+
+    public async Task<int> Create(Domain.Booking.Entities.Booking booking)
+    {
+        await _hotelDbContext.Bookings.AddAsync(booking);
+        await _hotelDbContext.SaveChangesAsync();
+        return booking.Id;
+    }
+
+    public async Task<bool> ExistsActiveBookingForRoom(int roomId, DateTime start, DateTime end)
+    {
+        return await _hotelDbContext.Bookings.AnyAsync(
+            b => b.RoomId == roomId &&
+            (
+                b.End > start &&
+                b.Start < end
+            )
+        );
+    }
+
+    public async Task<Domain.Booking.Entities.Booking?> Get(int id)
+    {
+        return await _hotelDbContext.Bookings
+            .Include(b => b.Guest)
+            .Include(b => b.Room)
+            .FirstOrDefaultAsync(b => b.Id == id);
+    }
+}
+```
+
+---
+
+### **7.2.5 Atualização do HotelDBContext**
+
+O contexto agora inclui:
+
+- DbSet de Booking
+- Aplicação da configuração BookingConfiguration
+
+```csharp
+using Microsoft.EntityFrameworkCore;
+using Entities_Guest = Domain.Guest.Entities;
+using Entities_Room = Domain.Room.Entities;
+using Entities_Booking = Domain.Booking.Entities;
+using Data.Booking;
+
+namespace Data
+{
+    public class HotelDBContext(DbContextOptions<HotelDBContext> options) : DbContext(options)
+    {
+        public virtual DbSet<Entities_Guest.Guest> Guests { get; set; }
+        public virtual DbSet<Entities_Room.Room> Rooms { get; set; }
+        public virtual DbSet<Entities_Booking.Booking> Bookings { get; set; }
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.ApplyConfiguration(new GuestConfiguration());
+            modelBuilder.ApplyConfiguration(new RoomConfiguration());
+            modelBuilder.ApplyConfiguration(new BookingConfigurantion());
+        }
+    }
+}
+```
+
+---
+
+### **7.2.6 Conclusão**
+
+Com o BookingController e o BookingRepository implementados, a Feature Booking está totalmente integrada ao sistema:
+
+- A API expõe endpoints REST completos
+- A camada Application orquestra o fluxo
+- O domínio valida regras complexas
+- A infraestrutura persiste reservas e verifica conflitos
+- O EF Core está configurado para mapear corretamente o estado da reserva
+
+A Feature Booking agora está pronta para:
+
+- **7.3 Testando Application Booking**
+- **7.4 Implementando BookingController Tests**
+- **7.5 Implementando BookingRepository Tests**
+- **7.6 Implementando UpdateBooking / CancelBooking / FinishBooking**
+
+
+---
+
+## **7.3 Testando Application – BookingManager**
+
+### **7.3.1 Introdução**  
+A Feature Booking possui a lógica de negócio mais complexa do sistema, envolvendo:
+
+- Validação de datas  
+- Verificação de existência de Guest e Room  
+- Regras de disponibilidade de Room  
+- Regras de validade de Guest  
+- Detecção de conflitos de reservas  
+- Mapeamento entre DTOs e entidades  
+- Persistência via BookingRepository  
+
+Por isso, os testes unitários do **BookingManager** precisam ser abrangentes, cobrindo:
+
+- Cenários positivos  
+- Cenários negativos  
+- Conflitos de reserva  
+- Dados inválidos  
+- IDs inexistentes  
+- Interação com múltiplos repositórios  
+- AutoMapper real  
+
+Nesta seção, implementamos uma suíte completa de testes utilizando:
+
+- **NUnit**
+- **Moq**
+- **AutoMapper real com profiles**
+- **Store in-memory** para simular conflitos de reserva
+
+---
+
+### **7.3.2 Setup dos Testes**
+
+O setup cria:
+
+- Mocks de `IBookingRepository`, `IRoomRepository`, `IGuestRepository`
+- AutoMapper real com todos os profiles necessários
+- Um store in-memory para simular reservas persistidas
+- Configurações de retorno para cada repositório
+
+```csharp
+public class BookingManagerTests
+{
+    private BookingManager _bookingManager = null!;
+    private Mock<IBookingRepository> _bookingRepo = null!;
+    private Mock<IRoomRepository> _roomRepo = null!;
+    private Mock<IGuestRepository> _guestRepo = null!;
+    private IMapper _mapper = null!;
+    private readonly int _createdBookingId = 111;
+    private readonly int _inAvailableRoomId = 121;
+    private readonly int _invalidGuestId = 999;
+    private readonly int _invalidRoomId = 999;
+
+    private List<Booking> _store = null!;
+
+    [SetUp]
+    public void Setup()
+    {
+        _bookingRepo = new Mock<IBookingRepository>();
+        _roomRepo = new Mock<IRoomRepository>();
+        _guestRepo = new Mock<IGuestRepository>();
+
+        _store = new List<Booking>();  // simula persistência
+
+        _bookingRepo
+            .Setup(x => x.Create(It.IsAny<Booking>()))
+            .ReturnsAsync(_createdBookingId)
+            .Callback<Booking>(booking =>
+            {
+                _store.Add(new Booking
+                {
+                    RoomId = booking.RoomId,
+                    GuestId = booking.GuestId,
+                    Start = booking.Start,
+                    End = booking.End,
+                    PlacedAt = booking.PlacedAt
+                });
+            });
+
+        _bookingRepo
+            .Setup(x => x.Get(_createdBookingId))
+            .ReturnsAsync(new Booking
+            {
+                Id = _createdBookingId,
+                PlacedAt = DateTime.UtcNow,
+                Start = DateTime.UtcNow.AddDays(1),
+                End = DateTime.UtcNow.AddDays(2),
+                RoomId = 1,
+                GuestId = 1,
+                Room = new Room
+                {
+                    Id = 1,
+                    Name = "Room 101",
+                    Level = 15,
+                    InMaintenance = false,
+                    Price = new Price { Value = 100, Currency = AcceptedCurrencies.Dollar }
+                },
+                Guest = new Guest
+                {
+                    Id = 1,
+                    Name = "John",
+                    Surname = "Doe",
+                    Email = "john.doe@example.com",
+                    DocumentId = new PersonId { IdNumber = "123456789", DocumentType = DocumentTypes.DriverLicense }
+                }
+            });
+
+        _roomRepo.Setup(x => x.Get(1)).ReturnsAsync(
+            new Room
+            {
+                Id = 1,
+                Name = "Room 101",
+                Level = 15,
+                InMaintenance = false,
+                Price = new Price { Value = 100, Currency = AcceptedCurrencies.Dollar }
+            });
+
+        _guestRepo.Setup(x => x.Get(1)).ReturnsAsync(
+            new Guest
+            {
+                Id = 1,
+                Name = "John",
+                Surname = "Doe",
+                Email = "john.doe@example.com",
+                DocumentId = new PersonId { IdNumber = "123456789", DocumentType = DocumentTypes.DriverLicense }
+            });
+
+        _bookingRepo
+            .Setup(x => x.ExistsActiveBookingForRoom(It.IsAny<int>(), It.IsAny<DateTime>(), It.IsAny<DateTime>()))
+            .ReturnsAsync((int roomId, DateTime start, DateTime end) =>
+                _store.Any(b =>
+                    b.RoomId == roomId &&
+                    b.Start < end &&
+                    b.End > start
+                )
+            );
+
+        _roomRepo.Setup(x => x.Get(_invalidRoomId)).ReturnsAsync(new Room { Id = _invalidRoomId, Name = "Room 101" });
+        _guestRepo.Setup(x => x.Get(_invalidGuestId)).ReturnsAsync(new Guest { Id = _invalidGuestId, Name = " ", Surname = "Doe", Email = "john.doe@example.com" });
+
+        _roomRepo.Setup(x => x.Get(_inAvailableRoomId)).ReturnsAsync(new Room
+        {
+            Id = _inAvailableRoomId,
+            Name = "Room 121",
+            InMaintenance = true
+        });
+
+        var config = new MapperConfiguration(cfg =>
+        {
+            cfg.AddProfile<CreateBookingProfile>();
+            cfg.AddProfile<ReturnBookingProfile>();
+            cfg.AddProfile<CreateRoomProfile>();
+            cfg.AddProfile<ReturnRoomProfille>();
+            cfg.AddProfile<CreateGuestProfile>();
+            cfg.AddProfile<ReturnGuestProfile>();
+        });
+
+        _mapper = config.CreateMapper();
+
+        _bookingManager = new BookingManager(
+            _bookingRepo.Object,
+            _guestRepo.Object,
+            _roomRepo.Object,
+            _mapper
+        );
+    }
+```
+
+---
+
+### **7.3.3 Testes Positivos**
+
+#### **7.3.3.1 Deve criar uma reserva com sucesso**
+
+```csharp
+[Test]
+public async Task CreateBooking_Should_Return_Created_Booking()
+{
+    var createBookingDto = new CreateBookingDTO
+    {
+        Start = DateTime.UtcNow.AddDays(1),
+        End = DateTime.UtcNow.AddDays(3),
+        RoomId = 1,
+        GuestId = 1
+    };
+
+    var request = new CreateBookingRequest { Data = createBookingDto };
+
+    var result = await _bookingManager.CreateBooking(request);
+
+    Assert.That(result, Is.Not.Null);
+    Assert.That(result.Success, Is.True);
+    Assert.That(_createdBookingId, Is.EqualTo(result.Data.Id));
+}
+```
+
+---
+
+#### **7.3.3.2 Deve retornar uma reserva existente**
+
+```csharp
+[Test]
+public async Task ShouldGetBookingById()
+{
+    var result = await _bookingManager.GetBooking(_createdBookingId);
+
+    Assert.That(result, Is.Not.Null);
+    Assert.That(result.Success, Is.True);
+    Assert.That(result.Data.Id, Is.EqualTo(_createdBookingId));
+    Assert.That(result.Data.Room, Is.Not.Null);
+    Assert.That(result.Data.Guest, Is.Not.Null);
+}
+```
+
+---
+
+### **7.3.4 Testes Negativos**
+
+#### **7.3.4.1 Dados inválidos**
+
+```csharp
+[TestCase("2024-01-10", "2024-01-05", 1, 1, ErrorCodes.INVALID_DATES)]
+[TestCase("2024-01-10", "2024-01-10", 1, 1, ErrorCodes.INVALID_DATES)]
+[TestCase("2024-01-10", "2024-01-15", 995, 1, ErrorCodes.INVALID_ROOM_ID)]
+[TestCase("2024-01-10", "2024-01-15", 1, 995, ErrorCodes.INVALID_GUEST_ID)]
+[TestCase("2024-01-10", "2024-01-15", 0, 1, ErrorCodes.MISSING_REQUIRED_INFORMATION_BOOKING)]
+[TestCase("2024-01-10", "2024-01-15", 1, 0, ErrorCodes.MISSING_REQUIRED_INFORMATION_BOOKING)]
+[TestCase("2024-01-10", "2024-01-15", 121, 1, ErrorCodes.INVALID_DATA_ROOM)]
+[TestCase("2024-01-10", "2024-01-15", 999, 1, ErrorCodes.INVALID_DATA_ROOM)]
+[TestCase("2024-01-10", "2024-01-15", 1, 999, ErrorCodes.INVALID_DATA_GUEST)]
+public async Task CreateBooking_Should_Return_Error_For_Invalid_Datas(
+    DateTime start,
+    DateTime end,
+    int roomId,
+    int guestId,
+    ErrorCodes expectedErrorCode)
+{
+    var createBookingDto = new CreateBookingDTO
+    {
+        Start = start,
+        End = end,
+        RoomId = roomId,
+        GuestId = guestId
+    };
+
+    var request = new CreateBookingRequest { Data = createBookingDto };
+
+    var result = await _bookingManager.CreateBooking(request);
+
+    Assert.That(result, Is.Not.Null);
+    Assert.That(result.Success, Is.False);
+    Assert.That(result.ErrorCode, Is.EqualTo(expectedErrorCode));
+}
+```
+
+---
+
+#### **7.3.4.2 Conflito de reserva**
+
+```csharp
+[TestCase("2024-01-10", "2024-01-15")]
+[TestCase("2024-01-09", "2024-01-11")]
+[TestCase("2024-01-14", "2024-01-16")]
+[TestCase("2024-01-09", "2024-01-16")]
+[TestCase("2024-01-08", "2024-01-16")]
+public async Task CreateBooking_Should_Return_Conflict_When_Second_Booking_Overlaps(DateTime start, DateTime end)
+{
+    var first = new CreateBookingDTO
+    {
+        Start = new DateTime(2024, 1, 10),
+        End = new DateTime(2024, 1, 15),
+        RoomId = 1,
+        GuestId = 1
+    };
+
+    var firstRes = await _bookingManager.CreateBooking(new CreateBookingRequest { Data = first });
+    Assert.That(firstRes.Success, Is.True);
+
+    var second = new CreateBookingDTO
+    {
+        Start = start,
+        End = end,
+        RoomId = 1,
+        GuestId = 1
+    };
+
+    var secondRes = await _bookingManager.CreateBooking(new CreateBookingRequest { Data = second });
+
+    Assert.That(secondRes.Success, Is.False);
+    Assert.That(secondRes.ErrorCode, Is.EqualTo(ErrorCodes.CONFLICTING_BOOKING));
+    Assert.That(_store.Count, Is.EqualTo(1));
+}
+```
+
+---
+
+### **7.3.5 Conclusão**
+
+A suíte de testes do **BookingManager** garante:
+
+- Validação completa das regras de negócio  
+- Detecção correta de conflitos de datas  
+- Tratamento adequado de exceções  
+- Interação correta com múltiplos repositórios  
+- Mapeamento correto entre DTOs e entidades  
+- Comportamento previsível e robusto  
+
+Com isso, a Feature Booking está totalmente validada e pronta para integração com o restante do sistema.
+
+

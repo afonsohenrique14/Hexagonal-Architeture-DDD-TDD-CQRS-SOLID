@@ -24,7 +24,7 @@ public class GuestController: ControllerBase
     }
 
     [HttpPost]
-    public  async Task<ActionResult<GuestDTO>> Post(GuestDTO guest)
+    public  async Task<ActionResult<ReturnGuestDTO>> Post(CreateGuestDTO guest)
     {
         var request = new CreateGuestRequest { Data = guest };
         
@@ -49,7 +49,7 @@ public class GuestController: ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<GuestDTO>> Get(int guestId)
+    public async Task<ActionResult<ReturnGuestDTO>> Get(int guestId)
     {
         var res = await _guestManager.GetGuest(guestId);
 

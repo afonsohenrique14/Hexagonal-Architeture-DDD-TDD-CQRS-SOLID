@@ -7,10 +7,16 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Folder Include="Booking\Ports\" />
+    <Folder Include="Booking\Requests\" />
+    <Folder Include="Booking\Responses\" />
     <Folder Include="Guest\DTOs\" />
     <Folder Include="Guest\Mappings\" />
     <Folder Include="Guest\Requests\" />
     <Folder Include="Guest\Responses\" />
+    <Folder Include="Room\Ports\" />
+    <Folder Include="Room\Requests\" />
+    <Folder Include="Room\Responses\" />
   </ItemGroup>
 
   <ItemGroup>
