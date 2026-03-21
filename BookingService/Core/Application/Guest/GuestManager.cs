@@ -1,10 +1,10 @@
 
 using Application.Guest.DTOs;
+using Application.Guest.Mappings;
 using Application.Guest.Requests;
 using Application.Guest.Responses;
 using Application.Ports;
 using AutoMapper;
-using Domain.Guest.Exceptions;
 using Domain.Guest.Ports;
 namespace Application;
 
@@ -25,53 +25,18 @@ public class GuestManager : IGuestManager
             var guest = _mapper.Map<Domain.Guest.Entities.Guest>(request.Data);
             await guest.Save(_guestRepository);
 
-            return new GuestResponse
+            return ResponseFactory.Ok<GuestResponse>(x =>
             {
-                Data = _mapper.Map<ReturnGuestDTO>(guest),
-                Success = true,
+                x.Data = _mapper.Map<ReturnGuestDTO>(guest);
 
-            };
+            });
 
         }
-        catch (InvalidPersonDucumentIdException)
+        catch (Exception ex)
         {
-            return new GuestResponse
-            {
-                
-                Success = false,
-                ErrorCode = ErrorCodes.INVALID_PERSON_DOCUMENT,
-                Message = "The document id or document type provided is invalid"
-            };
-        }
-        catch (MissingRequiredInformation)
-        {
-            return new GuestResponse
-            {
-                
-                Success = false,
-                ErrorCode = ErrorCodes.MISSING_REQUIRED_INFORMATION,
-                Message = "Missing required information"
-            };
-        }
-        catch (InvalidEmailException)
-        {
-            return new GuestResponse
-            {
-                
-                Success = false,
-                ErrorCode = ErrorCodes.INVALID_EMAIL,
-                Message = "The email provided is invalid"
-            };
-        }
-        catch (Exception)
-        {
-            return new GuestResponse
-            {
-                
-                Success = false,
-                ErrorCode = ErrorCodes.COULD_NOT_STORE_DATA,
-                Message = "There was an erro when saving to DB"
-            };
+            var failure = GuestExceptionMapper.Map(ex);
+
+            return ResponseFactory.Fail<GuestResponse>(failure);
         }
     }
 
@@ -89,11 +54,11 @@ public class GuestManager : IGuestManager
             };
         }
 
-        return new GuestResponse
+        return ResponseFactory.Ok<GuestResponse>(x =>
         {
-            Data = _mapper.Map<ReturnGuestDTO>(guest),
-            Success = true
-        };
+            x.Data = _mapper.Map<ReturnGuestDTO>(guest);
+
+        });
 
 
     }

@@ -1,5 +1,3 @@
-using System;
-
 namespace Domain.Booking.Ports;
 
 public interface IBookingRepository
@@ -9,4 +7,6 @@ public interface IBookingRepository
     Task<int> Create(Entities.Booking booking);
 
     Task<bool> ExistsActiveBookingForRoom(int roomId, DateTime start, DateTime end);
+
+    Task Update(Entities.Booking booking);
 }

@@ -87,13 +87,14 @@ public class Booking
      IGuestRepository guestRepository, IRoomRepository roomRepository
      ){
         await Validate(guestRepository, roomRepository, bookingRepository);
+        
         if (Id == 0)
         {
             Id = await bookingRepository.Create(this);
         }
         else
         {
-            // await bookingRepository.Update(this);
+            await bookingRepository.Update(this);
         }
     }
 

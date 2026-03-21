@@ -24,4 +24,15 @@
     <Project Path="BookingService/Tests/Domain/DomainTests/DomainTests.csproj" />
   </Folder>
   <Folder Name="/PaymentService/" />
+  <Folder Name="/PaymentService/Core/" />
+  <Folder Name="/PaymentService/Core/Application/">
+    <Project Path="PaymentService/Core/Application/Application/Payment.Application.csproj" Id="9a86da98-799b-468f-9761-d126ddcb8f42" />
+  </Folder>
+  <Folder Name="/PaymentService/Core/Domain/">
+    <Project Path="PaymentService/Core/Domain/Domain/Payment.Domain.csproj" />
+  </Folder>
+  <Folder Name="/PaymentService/Tests/" />
+  <Folder Name="/PaymentService/Tests/Payment.Unit.Tests/">
+    <Project Path="PaymentService/Tests/Payment.Unit.Tests/Payment.Unit.Tests/Payment.Unit.Tests.csproj" />
+  </Folder>
 </Solution>

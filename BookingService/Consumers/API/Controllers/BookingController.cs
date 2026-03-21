@@ -3,6 +3,8 @@ using Application;
 using Application.Booking.DTOs;
 using Application.Booking.Ports;
 using Application.Booking.Requests;
+using Application.Payment.DTOs;
+using Application.Payment.Responses;
 using Microsoft.AspNetCore.Mvc;
 
 namespace API.Controllers;
@@ -47,6 +49,23 @@ public class BookingController: ControllerBase
         _logger.LogError("Response with unknown ErrorCode Returned{@res}", res);
         return StatusCode(StatusCodes.Status500InternalServerError, res);
     }
+
+    [HttpPost]
+    [Route("{bookingId}/Pay")]
+    public async Task<ActionResult<PaymentResponse>> Pay(
+        PaymentRequestDTO paymentRequestDTO, int bookingId
+    )
+    {
+        paymentRequestDTO.BookingId = bookingId;
+
+        var res = await _bookingManager.PayForABooking(paymentRequestDTO);
+
+        if (res.Success) return Ok(res.Data);
+
+        return BadRequest(res);
+
+    }
+
 
     [HttpGet]
     public async Task<ActionResult<ReturnBookingDTO>> Get(int bookingId)

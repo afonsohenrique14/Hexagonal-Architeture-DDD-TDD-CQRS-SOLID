@@ -16,7 +16,11 @@ using Domain.Room.Ports;
 using Domain.Room.Enums;
 using Domain.Guest.ValueObjects;
 using Moq;
-
+using Application.Payment.Ports;
+using Application.Payment.Enums;
+using Application.Payment;
+using Application.Payment.Responses;
+using Application.Payment.DTOs;
 namespace ApplicationTests;
 
 public class BookingManagerTests
@@ -26,6 +30,8 @@ public class BookingManagerTests
     private Mock<IRoomRepository> _roomRepo = null!;
     private Mock<IGuestRepository> _guestRepo = null!;
     private IMapper _mapper = null!;
+    private Mock<IPaymentProcessorFactory> _paymentProcessorFactory = null!;
+    private Mock<IPaymentProcessor> _paymentProcessor = null!;
     private readonly int _createdBookingId = 111;
     private readonly int _inAvailableRoomId = 121;
     private readonly int _invalidGuestId = 999;
@@ -39,7 +45,8 @@ public class BookingManagerTests
         _bookingRepo = new Mock<IBookingRepository>();
         _roomRepo = new Mock<IRoomRepository>();
         _guestRepo = new Mock<IGuestRepository>();
-
+        _paymentProcessorFactory = new Mock<IPaymentProcessorFactory>();
+        _paymentProcessor = new Mock<IPaymentProcessor>();
         
         _store = new List<Booking>();  // ✅ ESSENCIAL
 
@@ -157,17 +164,49 @@ public class BookingManagerTests
         //  config.AssertConfigurationIsValid();
         _mapper = config.CreateMapper();
 
+        var dto = new PaymentRequestDTO
+        {
+            SelectedPaymentProvider = SupportedPaymentProviders.MercadoPago,
+            PaymentIntention = "https://www.mercadopago.com.br/asdf",
+            SelectedPaymentMethod = SupportedPaymentMethods.CreditCard,
+        };
+
+        var responseDTO = new PaymentStateDTO
+        {
+            CreatedDate = DateTime.Now,
+            Message = $"Sucesssfully paid {dto.PaymentIntention}",
+            PaymentId = "123",
+            Status = Status.Success
+
+        };
+
+        var response = new PaymentResponse
+                {
+                    Data = responseDTO,
+                    Success = true,
+                    Message = "Payment sucessfully processed"
+                };
+
+        _paymentProcessor
+            .Setup(x => x.CapturePayment(It.IsAny<string>()))
+            .Returns(Task.FromResult(response));
+
+        _paymentProcessorFactory
+            .Setup(x => x.GetPaymentProcessor(dto.SelectedPaymentProvider))
+            .Returns(_paymentProcessor.Object);
+
         _bookingManager = new BookingManager(
             _bookingRepo.Object,
             _guestRepo.Object,
             _roomRepo.Object,
-            _mapper
+            _mapper,
+            _paymentProcessorFactory.Object
         );
     }
 
     #region TESTES POSITIVOS
     [Test]
-    public async Task CreateBooking_Should_Return_Created_Booking()
+    public async Task Create_Booking_Should_Return_Created_Booking()
     {
         // Arrange
         var createBookingDto = new CreateBookingDTO
@@ -193,7 +232,7 @@ public class BookingManagerTests
     }
 
     [Test]
-    public async Task ShouldGetBookingById()
+    public async Task Should_Get_Booking_By_d()
     {
         // Act
         var result = await _bookingManager.GetBooking(_createdBookingId);
@@ -206,8 +245,28 @@ public class BookingManagerTests
         Assert.That(result.Data.Guest, Is.Not.Null);
     }
 
+    [Test]
+    public async Task Shoud_Pay_Booking_By_Id()
+    {
+      var requestDTO = new PaymentRequestDTO
+        {   
+            BookingId = _createdBookingId,
+            SelectedPaymentProvider = SupportedPaymentProviders.MercadoPago,
+            PaymentIntention = "https://www.mercadopago.com.br/asdf",
+            SelectedPaymentMethod = SupportedPaymentMethods.CreditCard,
+        };
+
+        var result =  await _bookingManager.PayForABooking(requestDTO);
+
+        Assert.That( result, Is.Not.Null);
+        Assert.That( result.Success, Is.True);
+        Assert.That( result.Data.PaymentId, Is.EqualTo("123"));
+        
+    }
+
 
     #endregion
+
     #region TESTES NEGATIVOS
     [TestCase("2024-01-10", "2024-01-05", 1, 1, ErrorCodes.INVALID_DATES)] // End antes do Start
     [TestCase("2024-01-10", "2024-01-10", 1, 1, ErrorCodes.INVALID_DATES)] // End igual ao Start
@@ -218,7 +277,7 @@ public class BookingManagerTests
     [TestCase("2024-01-10", "2024-01-15", 121, 1, ErrorCodes.INVALID_DATA_ROOM)] // RoomId de um quarto indisponível
     [TestCase("2024-01-10", "2024-01-15", 999, 1, ErrorCodes.INVALID_DATA_ROOM)] // RoomId inválido(simulando dados inválidos, não apenas inexistentes)
     [TestCase("2024-01-10", "2024-01-15", 1, 999, ErrorCodes.INVALID_DATA_GUEST)] // GuestId inválido(simulando dados inválidos, não apenas inexistentes)
-    public async Task CreateBooking_Should_Return_Error_For_Invalid_Datas(
+    public async Task Create_Booking_Should_Return_Error_For_Invalid_Datas(
         DateTime start,
         DateTime end,
         int roomId,
@@ -254,7 +313,7 @@ public class BookingManagerTests
     [TestCase("2024-01-14", "2024-01-16")] // Sobreposição no fim
     [TestCase("2024-01-09", "2024-01-16")] // Sobreposição total (Contido completamente dentro da primeira reserva)
     [TestCase("2024-01-08", "2024-01-16")] // Sobreposição total (Contendo completamente a primeira reserva)
-    public async Task CreateBooking_Should_Return_Conflict_When_Second_Booking_Overlaps( DateTime start, DateTime end)
+    public async Task Create_Booking_Should_Return_Conflict_When_Second_Booking_Overlaps( DateTime start, DateTime end)
     {
         // Arrange: primeira reserva (vai "persistir" em _store via Callback)
         var first = new CreateBookingDTO
@@ -286,5 +345,25 @@ public class BookingManagerTests
         // (opcional) garante que só a primeira foi persistida
         Assert.That(_store.Count, Is.EqualTo(1));
     }
+
+    [Test]
+    public async Task Shoud_Not_Pay_Booking_With_Invalid_Id()
+    {
+      var requestDTO = new PaymentRequestDTO
+        {   
+            BookingId = 5,
+            SelectedPaymentProvider = SupportedPaymentProviders.MercadoPago,
+            PaymentIntention = "https://www.mercadopago.com.br/asdf",
+            SelectedPaymentMethod = SupportedPaymentMethods.CreditCard,
+        };
+
+        var result =  await _bookingManager.PayForABooking(requestDTO);
+
+        Assert.That( result, Is.Not.Null);
+        Assert.That( result.Success, Is.False);
+        Assert.That( result.ErrorCode, Is.EqualTo(ErrorCodes.INVALID_BOOKING_ID));
+        
+    }
+
     #endregion
 }

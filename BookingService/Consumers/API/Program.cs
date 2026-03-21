@@ -1,6 +1,11 @@
+
+using System.Text.Json.Serialization;
 using Application;
 using Application.Booking;
 using Application.Booking.Ports;
+using Application.MercadoPago;
+using Application.Payment;
+using Application.Payment.Ports;
 using Application.Ports;
 using Application.Room;
 using Application.Room.Ports;
@@ -12,6 +17,8 @@ using Domain.Booking.Ports;
 using Domain.Guest.Ports;
 using Domain.Room.Ports;
 using Microsoft.EntityFrameworkCore;
+using Payment.Application;
+
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -30,6 +37,7 @@ builder.Services.AddScoped<IRoomManager, RoomManager>();
 builder.Services.AddScoped<IRoomRepository, RoomRepostory>();
 builder.Services.AddScoped<IBookingManager, BookingManager>();
 builder.Services.AddScoped<IBookingRepository, BookingRepository>();
+builder.Services.AddScoped<IPaymentProcessorFactory, PaymentProcessorFactory>();
 #endregion
 
 #region Database Context
@@ -46,6 +54,11 @@ builder.Services.AddEndpointsApiExplorer();
 
 builder.Services.AddSwaggerGen();
 #endregion
+
+builder.Services.AddControllersWithViews()
+    .AddJsonOptions(
+        options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter())
+    );
 
 var app = builder.Build();
 

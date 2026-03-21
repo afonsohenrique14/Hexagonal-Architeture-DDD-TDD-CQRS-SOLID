@@ -1,10 +1,12 @@
-using System;
 using Application.Booking.DTOs;
+using Application.Booking.Mappings;
 using Application.Booking.Ports;
 using Application.Booking.Requests;
 using Application.Booking.Responses;
+using Application.Payment.DTOs;
+using Application.Payment.Ports;
+using Application.Payment.Responses;
 using AutoMapper;
-using Domain.Booking.Exceptions;
 using Domain.Booking.Ports;
 using Domain.Guest.Ports;
 using Domain.Room.Ports;
@@ -17,103 +19,41 @@ public class BookingManager : IBookingManager
     private readonly IGuestRepository _guestRepository;
     private readonly IRoomRepository _roomRepository;
 
+    private readonly IPaymentProcessorFactory _paymentProcessorFactory;
+
 
     private readonly IMapper _mapper;
 
-    public BookingManager(IBookingRepository bookingRepository, IGuestRepository guestRepository, IRoomRepository roomRepository, IMapper mapper)
+    public BookingManager(IBookingRepository bookingRepository, IGuestRepository guestRepository, IRoomRepository roomRepository, IMapper mapper, IPaymentProcessorFactory paymentProcessorFactory)
     {
         _bookingRepository = bookingRepository;
         _guestRepository = guestRepository;
         _roomRepository = roomRepository;
         _mapper = mapper;
+        _paymentProcessorFactory = paymentProcessorFactory;
     }
-    
+
     public async Task<BookingResponse> CreateBooking(CreateBookingRequest request)
-    {   
-        try{     
+    {
+        try
+        {
 
             var booking = _mapper.Map<Domain.Booking.Entities.Booking>(request.Data);
 
             await booking.Save(_bookingRepository
             , _guestRepository, _roomRepository);
 
-            return new BookingResponse
+            return ResponseFactory.Ok<BookingResponse>(r =>
             {
-                Data = _mapper.Map<ReturnBookingDTO>(booking),
-                Success = true,
-            };
+                r.Data = _mapper.Map<ReturnBookingDTO>(booking);
+            });
+
         }
-        catch (MissingRequiredInformation)
+        catch (Exception ex)
         {
-            return new BookingResponse
-            {
-                Success = false,
-                ErrorCode = ErrorCodes.MISSING_REQUIRED_INFORMATION_BOOKING,
-                Message = "Some required information for creating the booking was not provided"
-            };
-        }
-        catch (InvalidBookingDatesException)
-        {
-            return new BookingResponse
-            {
-                Success = false,
-                ErrorCode = ErrorCodes.INVALID_DATES,
-                Message = "The provided booking dates are invalid"
-            };
-        }
-        catch (ConflictingBookingException)
-        {
-            return new BookingResponse
-            {
-                Success = false,
-                ErrorCode = ErrorCodes.CONFLICTING_BOOKING,
-                Message = "The provided room is not available for the selected dates"
-            };
-        }
-        catch (Domain.Guest.Exceptions.GuestExceptons)
-        {
-            return new BookingResponse
-            {
-                Success = false,    
-                ErrorCode = ErrorCodes.INVALID_DATA_GUEST,
-                Message = "The provided guest has invalid data"
-            };
-        }
-        catch (Domain.Room.Exceptions.RoomExceptions)
-        {
-            return new BookingResponse
-            {
-                Success = false,
-                ErrorCode = ErrorCodes.INVALID_DATA_ROOM,
-                Message = "The provided room has invalid data"
-            };
-        }
-        catch (InvalidGuestIDException)
-        {
-            return new BookingResponse
-            {
-                Success = false,
-                ErrorCode = ErrorCodes.INVALID_GUEST_ID,
-                Message = "The provided guest has invalid data"
-            };
-        }
-        catch (InvalidRoomIDException)
-        {
-            return new BookingResponse
-            {
-                Success = false,
-                ErrorCode = ErrorCodes.INVALID_ROOM_ID,
-                Message = "The provided room does not exist"
-            };
-        }
-        catch (Exception)
-        {
-            return new BookingResponse
-            {
-                Success = false,
-                ErrorCode = ErrorCodes.BOOKING_COULD_NOT_BE_CREATED,
-                Message = "An error occurred while creating the booking"
-            };
+            var failure = BookingExceptionMapper.Map(ex);
+
+            return ResponseFactory.Fail<BookingResponse>(failure);
         }
     }
 
@@ -121,7 +61,7 @@ public class BookingManager : IBookingManager
     {
         var guest = await _bookingRepository.Get(bookingId);
 
-        if(guest == null)
+        if (guest == null)
         {
             return new BookingResponse
             {
@@ -138,4 +78,50 @@ public class BookingManager : IBookingManager
         };
 
     }
+
+    public async Task<PaymentResponse> PayForABooking(PaymentRequestDTO paymentRequestDTO)
+    {
+        try
+        {
+            var booking = await _bookingRepository.Get(paymentRequestDTO.BookingId);
+
+            if (booking == null)
+            {
+                return new PaymentResponse
+                {
+                    Success = false,
+                    ErrorCode = ErrorCodes.INVALID_BOOKING_ID,
+                    Message = "No booking found with the provided id"
+                };
+            }
+
+            var paymentProcessor = _paymentProcessorFactory.GetPaymentProcessor(paymentRequestDTO.SelectedPaymentProvider);
+
+            var response = await paymentProcessor.CapturePayment(paymentRequestDTO.PaymentIntention);
+
+            if (!response.Success)
+            {
+                return response;
+            }
+
+            booking.ChangeState(Domain.Booking.Enums.Action.Pay);
+
+            await booking.Save(_bookingRepository, _guestRepository, _roomRepository);
+
+            return ResponseFactory.Ok<PaymentResponse>(r =>
+                {
+                    r.Data = response.Data;
+                    r.Message = "Payment successfully processed";
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            var failure = BookingExceptionMapper.Map(ex);
+
+            return ResponseFactory.Fail<PaymentResponse>(failure);
+        }
+
+    }
+
 }

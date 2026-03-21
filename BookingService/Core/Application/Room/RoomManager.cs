@@ -1,5 +1,6 @@
 
 using Application.Room.DTOs;
+using Application.Room.Mappings;
 using Application.Room.Ports;
 using Application.Room.Requests;
 using Application.Room.Responses;
@@ -29,48 +30,19 @@ public class RoomManager : IRoomManager
             var room = _mapper.Map<Entities.Room>(request.Data);
             await room.Save(_roomRepository);
 
-            return new RoomResponse
-            {
-                Data = _mapper.Map<ReturnRoomDTO>(room),
-                Success = true,
-            };
+            return ResponseFactory.Ok<RoomResponse>(
+                x =>
+                {
+                    x.Data = _mapper.Map<ReturnRoomDTO>(room);
+                }
+            );
 
         }
-        catch (InvalidRoomDataException)
+        catch (Exception ex)
         {
-            return new RoomResponse
-            {
-                Success = false,
-                ErrorCode = ErrorCodes.MISSING_REQUIRED_INFORMATION_ROOM,
-                Message = "Missing required information to create a room"
-            };
-        }
-        catch (InvalidRoomPriceException)
-        {
-            return new RoomResponse
-            {
-                Success = false,
-                ErrorCode = ErrorCodes.INVALID_ROOM_PRICE,
-                Message = "The price provided for the room is invalid"
-            };
-        }
-        catch (InvalidRoomLevelException)
-            {
-                return new RoomResponse
-                {
-                    Success = false,
-                    ErrorCode = ErrorCodes.INVALID_ROOM_LEVEL,
-                    Message = "The level provided for the room is invalid"
-                };
-        }
-        catch (Exception)
-        {
-            return new RoomResponse
-            {
-                Success = false,
-                ErrorCode = ErrorCodes.ROOM_COULD_NOT_STORE_DATA,
-                Message = "An error ocurred while creating the room"
-            };
+            var failure = RoomExceptionMapper.Map(ex);
+
+            return ResponseFactory.Fail<RoomResponse>(failure);
         }
     }
 

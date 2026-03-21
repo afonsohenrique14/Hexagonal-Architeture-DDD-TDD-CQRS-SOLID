@@ -3037,10 +3037,6 @@ Com isso, a Feature Room está totalmente validada e pronta para integração co
 ---
 
 # 7 Feature Booking
-Afonso, aqui está a **seção 7.1 COMPLETA**, totalmente revisada, organizada e com **todos os níveis de títulos corrigidos**, seguindo exatamente o mesmo padrão das seções anteriores da sua documentação.
-
-Tudo está formatado como um capítulo oficial da sua documentação técnica.
-
 ---
 
 ## **7.1 Feature Booking (Domain e Application)**
@@ -3970,3 +3966,939 @@ A suíte de testes do **BookingManager** garante:
 Com isso, a Feature Booking está totalmente validada e pronta para integração com o restante do sistema.
 
 
+# 8 Feature Payment
+
+---
+
+## **8.1 Feature Payment**
+
+### **8.1.1 Introdução**  
+A Feature **Payment** adiciona ao sistema a capacidade de processar pagamentos externos utilizando provedores como:
+
+- PayPal  
+- Stripe  
+- PagSeguro  
+- MercadoPago  
+
+Diferente das features anteriores, **Payment não pertence ao domínio do hotel**, mas sim à **camada Application**, pois:
+
+- Não é uma regra de negócio do hotel  
+- É uma integração externa  
+- Pode mudar sem afetar o domínio  
+- Pode ter múltiplos provedores plugáveis  
+
+Por isso, a arquitetura segue o padrão:
+
+- **DTOs** → Entrada e saída  
+- **Enums** → Métodos e provedores suportados  
+- **PaymentProcessor** → Interface para captura de pagamento  
+- **PaymentProcessorFactory** → Criação dinâmica do processador correto  
+- **PaymentResponse** → Resposta padronizada  
+
+Essa estrutura permite adicionar novos provedores sem alterar o restante do sistema.
+
+---
+
+### **8.1.2 DTOs da Camada Application**
+
+#### **8.1.2.1 PaymentRequestDTO**
+
+Representa a intenção de pagamento enviada pelo cliente.
+
+```csharp
+public class PaymentRequestDTO
+{
+    public int BookingId { get; set; }
+
+    public string PaymentIntention { get; set; } = null!;
+
+    public SupportedPaymentProviders SelectedPaymentProvider { get; set; }
+    public SupportedPaymentMethods SelectedPaymentMethod { get; set; }
+}
+```
+
+---
+
+#### **8.1.2.2 PaymentStateDTO**
+
+Representa o estado final do pagamento após a tentativa de captura.
+
+```csharp
+public class PaymentStateDTO
+{
+    public Status Status  { get; set; }
+
+    public string PaymentId { get; set; } = null!;
+
+    public DateTime CreatedDate { get; set; }
+
+    public string Message  { get; set; } = null!;
+}
+```
+
+---
+
+### **8.1.3 Enums da Feature Payment**
+
+#### **8.1.3.1 Status**
+
+```csharp
+public enum Status
+{
+    Success,
+    Failed,
+    Error,
+    Undefined
+}
+```
+
+---
+
+#### **8.1.3.2 SupportedPaymentMethods**
+
+```csharp
+public enum SupportedPaymentMethods
+{
+    DebitCard = 1,
+    CreditCard = 2,
+    BankTransfer = 3
+}
+```
+
+---
+
+#### **8.1.3.3 SupportedPaymentProviders**
+
+```csharp
+public enum SupportedPaymentProviders
+{
+    PayPal = 1,
+    Stripe = 2,
+    PagSeguro = 3,
+    MercadoPago = 4
+}
+```
+
+---
+
+### **8.1.4 Interfaces da Camada Application**
+
+#### **8.1.4.1 IPaymentProcessor**
+
+Define o contrato para qualquer processador de pagamento.
+
+```csharp
+public interface IPaymentProcessor
+{
+    Task<PaymentResponse> CapturePayment(string paymentIntention);
+}
+```
+
+Cada provedor (PayPal, Stripe, etc.) implementará essa interface.
+
+---
+
+#### **8.1.4.2 IPaymentProcessorFactory**
+
+Define o contrato para criação dinâmica do processador correto.
+
+```csharp
+public interface IPaymentProcessorFactory
+{
+    IPaymentProcessor GetPaymentProcessor(SupportedPaymentProviders selectedPaymentProvider);
+}
+```
+
+Essa factory permite adicionar novos provedores sem alterar o código existente.
+
+---
+
+### **8.1.5 PaymentResponse**
+
+A resposta padronizada para qualquer operação de pagamento.
+
+```csharp
+public class PaymentResponse : Response
+{
+    public PaymentStateDTO Data { get; set; } = null!;
+}
+```
+
+---
+
+### **8.1.6 Conclusão**
+
+A Feature Payment estabelece a base para integração com provedores externos de pagamento.  
+A arquitetura foi projetada para ser:
+
+- **Extensível** → novos provedores podem ser adicionados facilmente  
+- **Isolada** → não afeta o domínio  
+- **Testável** → processadores podem ser mockados  
+- **Flexível** → suporta múltiplos métodos e provedores  
+---
+
+## **8.2 BookingManager e BookingController (Integração com Pagamentos)**
+
+### **8.2.1 Introdução**  
+Nesta etapa, evoluímos a Feature Booking para suportar **pagamentos externos**, integrando a camada Application com a Feature Payment criada na seção 8.1.
+
+A partir de agora, o fluxo de reserva passa a ter duas etapas:
+
+1. **Criação da reserva**  
+2. **Pagamento da reserva**
+
+Para isso, adicionamos ao `BookingManager`:
+
+- Um novo método: **PayForABooking**
+- Injeção da **IPaymentProcessorFactory**
+- Encaminhamento da intenção de pagamento para o provedor correto
+
+E ao `BookingController`:
+
+- Um novo endpoint:  
+  `POST /booking/{bookingId}/pay`
+
+Essa integração segue rigorosamente os princípios de:
+
+- DDD  
+- Arquitetura Hexagonal  
+- Clean Architecture  
+- SOLID  
+
+---
+
+### **8.2.2 Atualização do BookingManager**
+
+#### **8.2.2.1 Construtor atualizado**
+
+```csharp
+public BookingManager(
+    IBookingRepository bookingRepository,
+    IGuestRepository guestRepository,
+    IRoomRepository roomRepository,
+    IMapper mapper,
+    IPaymentProcessorFactory paymentProcessorFactory)
+{
+    _bookingRepository = bookingRepository;
+    _guestRepository = guestRepository;
+    _roomRepository = roomRepository;
+    _mapper = mapper;
+    _paymentProcessorFactory = paymentProcessorFactory;
+}
+```
+
+---
+
+#### **8.2.2.2 Método PayForABooking**
+
+```csharp
+public async Task<PaymentResponse> PayForABooking(PaymentRequestDTO paymentRequestDTO)
+{
+    var paymentProcessor = _paymentProcessorFactory
+        .GetPaymentProcessor(paymentRequestDTO.SelectedPaymentProvider);
+
+    var response = await paymentProcessor.CapturePayment(paymentRequestDTO.PaymentIntention);
+
+    if (response.Success)
+    {
+        return new PaymentResponse
+        {
+            Success = true,
+            Data = response.Data,
+            Message = "Payment successfully processed"
+        };
+    }
+
+    return response;
+}
+```
+
+---
+
+### **8.2.3 BookingController Atualizado**
+
+#### **8.2.3.1 Endpoint de criação de reserva**
+
+```csharp
+[HttpPost]
+public async Task<ActionResult<ReturnBookingDTO>> Post(CreateBookingDTO booking)
+{
+    var request = new CreateBookingRequest { Data = booking };
+        
+    var res = await _bookingManager.CreateBooking(request);
+
+    if(res.Success) return Created("", res.Data);
+
+    if(
+        res.ErrorCode == ErrorCodes.INVALID_DATES || 
+        res.ErrorCode == ErrorCodes.MISSING_REQUIRED_INFORMATION_BOOKING || 
+        res.ErrorCode == ErrorCodes.INVALID_GUEST_ID ||
+        res.ErrorCode == ErrorCodes.INVALID_ROOM_ID ||
+        res.ErrorCode == ErrorCodes.BOOKING_COULD_NOT_BE_CREATED ||
+        res.ErrorCode == ErrorCodes.NOT_FOUND
+    )
+    {
+        return BadRequest(res);
+    }
+
+    _logger.LogError("Response with unknown ErrorCode Returned{@res}", res);
+    return StatusCode(StatusCodes.Status500InternalServerError, res);
+}
+```
+
+---
+
+#### **8.2.3.2 Novo endpoint: PayForABooking**
+
+```csharp
+[HttpPost]
+[Route("{bookingId}/Pay")]
+public async Task<ActionResult<PaymentResponse>> Pay(
+    PaymentRequestDTO paymentRequestDTO, int bookingId
+)
+{
+    paymentRequestDTO.BookingId = bookingId;
+
+    var res = await _bookingManager.PayForABooking(paymentRequestDTO);
+
+    if (res.Success) return Ok(res.Data);
+
+    return BadRequest(res);
+}
+```
+
+---
+
+#### **8.2.3.3 Endpoint de consulta de reserva**
+
+```csharp
+[HttpGet]
+public async Task<ActionResult<ReturnBookingDTO>> Get(int bookingId)
+{
+    var res = await _bookingManager.GetBooking(bookingId);
+
+    if(res.Success) return Ok(res.Data);
+
+    if(res.ErrorCode == ErrorCodes.NOT_FOUND)
+    {
+        return NotFound(res);
+    }
+
+    _logger.LogError("Response with unknown ErrorCode Returned{@res}", res);
+    return StatusCode(StatusCodes.Status500InternalServerError, res);
+}
+```
+
+---
+
+### **8.2.4 Fluxo Completo de Pagamento**
+
+1. Cliente cria uma reserva  
+2. Cliente inicia o pagamento  
+3. BookingManager seleciona o provedor correto  
+4. PaymentProcessor executa a captura  
+5. PaymentResponse retorna o estado final  
+
+---
+
+### **8.2.5 Benefícios Arquiteturais**
+
+- Extensível  
+- Baixo acoplamento  
+- Testável  
+- Segue DIP  
+- Permite múltiplos provedores  
+
+---
+
+### **8.2.6 Conclusão**
+
+Com a integração entre Booking e Payment:
+
+- O sistema agora suporta pagamentos reais  
+- A arquitetura continua limpa e modular  
+- A lógica de negócio permanece isolada  
+- A API expõe endpoints claros e consistentes  
+
+---
+
+## **8.3 Microserviço Payment**
+
+### **8.3.1 Introdução**  
+A Feature Payment agora evolui para um **microserviço de pagamento**, responsável por:
+
+- Processar pagamentos externos  
+- Integrar provedores reais (ex.: MercadoPago)  
+- Permitir fallback para provedores não implementados  
+- Retornar estados padronizados de pagamento  
+- Ser plugável e extensível  
+
+Nesta etapa, implementamos:
+
+- **MercadoPagoAdapter**  
+- **NotImplementedPaymentProvider**  
+- **PaymentProcessorFactory**  
+- **Exceções específicas**  
+
+Esse design segue o padrão **Adapter + Factory**, garantindo baixo acoplamento e alta extensibilidade.
+
+---
+
+### **8.3.2 MercadoPagoAdapter**
+
+O adapter simula a integração com o MercadoPago.  
+Ele implementa `IPaymentProcessor` e encapsula toda a lógica específica do provedor.
+
+#### **8.3.2.1 Implementação**
+
+```csharp
+public class MercadoPagoAdapter : IPaymentProcessor
+{
+    public Task<PaymentResponse> CapturePayment(string paymentIntention)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(paymentIntention))
+            {
+                throw new InvalidaPaymentIntentionException();
+            }
+
+            paymentIntention += "/success";
+
+            var dto = new PaymentStateDTO
+            {
+                CreatedDate = DateTime.Now,
+                Message = $"Successfully paid {paymentIntention}",
+                PaymentId = "123",
+                Status = Payment.Enums.Status.Success
+            };
+
+            var resp = new PaymentResponse
+            {
+                Success = true,
+                Data = dto,
+                Message = "Payment sucessfully processed"
+            };
+
+            return Task.FromResult(resp);
+        }
+        catch (InvalidaPaymentIntentionException)
+        {
+            var resp = new PaymentResponse
+            {
+                Success = false,
+                ErrorCode = ErrorCodes.INVALID_PAYMENT_INTENTION,
+            };
+
+            return Task.FromResult(resp);
+        }
+    }
+}
+```
+
+---
+
+### **8.3.3 Exceções do MercadoPago**
+
+```csharp
+public class InvalidaPaymentIntentionException : Exception
+{
+}
+```
+
+---
+
+### **8.3.4 NotImplementedPaymentProvider**
+
+Esse provider é retornado quando o usuário seleciona um provedor ainda não implementado.
+
+#### **8.3.4.1 Implementação**
+
+```csharp
+public class NotImplementedPaymentProvider : IPaymentProcessor
+{
+    public Task<PaymentResponse> CapturePayment(string paymentIntention)
+    {
+        var paymentResponse = new PaymentResponse
+        {
+            Success = false,
+            ErrorCode = ErrorCodes.PAYMENT_PROVIDER_NOT_IMPLEMENTED,
+            Message = "The selected payment provider iis not available at the moment"
+        };
+
+        return Task.FromResult(paymentResponse);
+    }
+}
+```
+
+---
+
+### **8.3.5 PaymentProcessorFactory**
+
+A factory é responsável por retornar o processador correto com base no provedor selecionado.
+
+#### **8.3.5.1 Implementação**
+
+```csharp
+public class PaymentProcessorFactory : IPaymentProcessorFactory
+{
+    public IPaymentProcessor GetPaymentProcessor(SupportedPaymentProviders selectedPaymentProvider)
+    {
+        switch(selectedPaymentProvider)
+        {
+            case SupportedPaymentProviders.MercadoPago:
+                return new MercadoPagoAdapter();
+
+            default:
+                return new NotImplementedPaymentProvider();
+        }
+    }
+}
+```
+
+---
+
+### **8.3.6 Fluxo Completo do Microserviço Payment**
+
+1. O cliente envia um `PaymentRequestDTO`  
+2. O BookingManager chama a **PaymentProcessorFactory**  
+3. A factory retorna o adapter correto  
+4. O adapter processa o pagamento  
+5. O resultado é retornado como **PaymentResponse**  
+6. O BookingController retorna o estado final ao cliente  
+
+---
+
+### **8.3.7 Benefícios Arquiteturais**
+
+- **Plugável**: novos provedores podem ser adicionados sem alterar o BookingManager  
+- **Isolado**: lógica de pagamento não contamina o domínio  
+- **Testável**: adapters podem ser mockados facilmente  
+- **Extensível**: basta criar novos adapters e registrar na factory  
+- **Seguro**: erros são tratados e convertidos em `PaymentResponse`  
+
+---
+
+### **8.3.8 Conclusão**
+
+Com o microserviço Payment implementado:
+
+- O sistema agora suporta múltiplos provedores  
+- A arquitetura permanece limpa e modular  
+- O fluxo de pagamento está totalmente integrado ao Booking  
+- A factory permite expansão futura sem impacto no restante do sistema  
+---
+
+## **8.4 Testando o Microserviço Payment**
+
+### **8.4.1 Introdução**  
+A Feature Payment foi projetada para ser totalmente plugável e desacoplada, permitindo que diferentes provedores de pagamento sejam adicionados sem alterar o restante do sistema.  
+Para garantir sua confiabilidade, criamos testes unitários que validam:
+
+- O comportamento do **MercadoPagoAdapter**
+- O comportamento da **PaymentProcessorFactory**
+- O fallback para provedores não implementados
+- O tratamento de erros (ex.: Payment Intention inválida)
+
+Os testes utilizam:
+
+- **NUnit**
+- **Instâncias reais da factory**
+- **Execução assíncrona dos adapters**
+
+---
+
+### **8.4.2 Testes do MercadoPagoAdapter**
+
+#### **8.4.2.1 Testes Positivos**
+
+```csharp
+[Test]
+public void Should_Return_Mercado_Pago_Adapter_Provider()
+{
+    var factory = new PaymentProcessorFactory();
+
+    var provider = factory.GetPaymentProcessor(SupportedPaymentProviders.MercadoPago);
+
+    Assert.That(provider, Is.TypeOf<MercadoPagoAdapter>());
+}
+
+[Test]
+public async Task ShoudSucessfullyProcessPaymentAsync()
+{
+    var factory = new PaymentProcessorFactory();
+
+    var provider = factory.GetPaymentProcessor(SupportedPaymentProviders.MercadoPago);
+
+    var res = await provider.CapturePayment($"https://www.mercadopago.com/asdf");
+
+    Assert.That(res.Success, Is.True);
+    Assert.That(res.Data, Is.Not.Null);
+    Assert.That(res.Data.CreatedDate, Is.Not.EqualTo(default(DateTime)));
+    Assert.That(res.Data.PaymentId, Is.Not.Null);
+}
+```
+
+Esses testes garantem que:
+
+- O provider correto é retornado pela factory  
+- O pagamento é processado com sucesso  
+- O DTO retornado contém dados válidos  
+
+---
+
+#### **8.4.2.2 Testes Negativos**
+
+```csharp
+[Test]
+public async Task Should_Fail_When_Payment_Intention_String_Is_InvalidAsync()
+{
+    var factory = new PaymentProcessorFactory();
+
+    var provider = factory.GetPaymentProcessor(SupportedPaymentProviders.MercadoPago);
+
+    var res = await provider.CapturePayment("");
+
+    Assert.That(res.Success, Is.False);
+    Assert.That(res.ErrorCode, Is.EqualTo(ErrorCodes.INVALID_PAYMENT_INTENTION));
+}
+```
+
+Esse teste valida:
+
+- O tratamento correto da exceção `InvalidaPaymentIntentionException`
+- O retorno do `ErrorCodes.INVALID_PAYMENT_INTENTION`
+
+---
+
+### **8.4.3 Testes da PaymentProcessorFactory**
+
+#### **8.4.3.1 Testes Positivos**
+
+```csharp
+[Test]
+public void Should_Return_Mercado_Pago_Provider()
+{
+    var factory = new PaymentProcessorFactory();
+
+    var provider = factory.GetPaymentProcessor(SupportedPaymentProviders.MercadoPago);
+
+    Assert.That(provider, Is.TypeOf<MercadoPagoAdapter>());
+}
+```
+
+Esse teste garante que a factory retorna o adapter correto quando o provedor é suportado.
+
+---
+
+#### **8.4.3.2 Testes Negativos**
+
+```csharp
+[TestCase(SupportedPaymentProviders.PagSeguro)]
+[TestCase(SupportedPaymentProviders.PayPal)]
+[TestCase(SupportedPaymentProviders.Stripe)]
+public async Task Should_Return_Not_Implemented_Payment_Provider(SupportedPaymentProviders paymentProviders)
+{
+    var factory = new PaymentProcessorFactory();
+
+    var provider = factory.GetPaymentProcessor(paymentProviders);
+
+    Assert.That(provider, Is.TypeOf<NotImplementedPaymentProvider>());
+
+    var res = await provider.CapturePayment($"https://www.{paymentProviders}.com/asdf");
+
+    Assert.That(res.Success, Is.False);
+    Assert.That(res.ErrorCode, Is.EqualTo(ErrorCodes.PAYMENT_PROVIDER_NOT_IMPLEMENTED));
+}
+```
+
+Esse teste garante que:
+
+- Provedores não implementados retornam `NotImplementedPaymentProvider`
+- O erro correto é retornado (`PAYMENT_PROVIDER_NOT_IMPLEMENTED`)
+
+---
+
+### **8.4.4 Conclusão**
+
+A suíte de testes do microserviço Payment garante:
+
+- Funcionamento correto do MercadoPagoAdapter  
+- Tratamento adequado de erros  
+- Factory funcionando como ponto único de criação  
+- Fallback seguro para provedores não implementados  
+- Comportamento previsível e robusto  
+
+Com isso, a Feature Payment está totalmente validada e pronta para integração com o restante do sistema.
+---
+
+## **8.5 Atualizando Status do Booking**
+
+### **8.5.1 Introdução**  
+Até este ponto, o sistema permitia:
+
+- Criar reservas  
+- Consultar reservas  
+- Processar pagamentos  
+
+Agora, evoluímos a Feature Booking para permitir **atualização do status da reserva**, garantindo que:
+
+- Após o pagamento, a reserva muda de **Created → Paid**  
+- Após finalização, muda de **Paid → Finished**  
+- Após cancelamento, muda de **Created/Paid → Canceled**  
+- Após reabertura, muda de **Canceled → Created**  
+- Após reembolso, muda de **Paid → Refounded**
+
+Essa lógica é **100% controlada pelo domínio**, através do método:
+
+```
+booking.ChangeState(Action action)
+```
+
+E persistida via:
+
+```
+await booking.Save(...)
+```
+
+Para isso, foram necessárias três atualizações:
+
+1. **Adicionar Update ao IBookingRepository**  
+2. **Atualizar o método Save do Booking**  
+3. **Atualizar o BookingManager para persistir mudanças de status**  
+
+---
+
+### **8.5.2 Atualização do IBookingRepository**
+
+#### **8.5.2.1 Novo método Update**
+
+```csharp
+public interface IBookingRepository
+{
+    Task<Entities.Booking?> Get(int id);
+
+    Task<int> Create(Entities.Booking booking);
+
+    Task<bool> ExistsActiveBookingForRoom(int roomId, DateTime start, DateTime end);
+
+    Task Update(Entities.Booking booking);
+}
+```
+
+Esse método permite persistir mudanças de status sem recriar a reserva.
+
+---
+
+### **8.5.3 Atualização da Entidade Booking**
+
+#### **8.5.3.1 Save agora chama Update quando Id != 0**
+
+```csharp
+public async Task Save(
+    IBookingRepository bookingRepository,
+    IGuestRepository guestRepository,
+    IRoomRepository roomRepository)
+{
+    await Validate(guestRepository, roomRepository, bookingRepository);
+        
+    if (Id == 0)
+    {
+        Id = await bookingRepository.Create(this);
+    }
+    else
+    {
+        await bookingRepository.Update(this);
+    }
+}
+```
+
+Agora o domínio controla:
+
+- Quando criar  
+- Quando atualizar  
+
+---
+
+### **8.5.4 Atualização do BookingManager**
+
+O BookingManager agora:
+
+- Valida se a reserva existe antes do pagamento  
+- Processa o pagamento  
+- Atualiza o status da reserva  
+- Persiste a mudança via Save  
+- Usa o novo **BookingExceptionMapper**  
+- Usa o novo **ResponseFactory**  
+
+#### **8.5.4.1 Método PayForABooking atualizado**
+
+```csharp
+public async Task<PaymentResponse> PayForABooking(PaymentRequestDTO paymentRequestDTO)
+{
+    try
+    {
+        var booking = await _bookingRepository.Get(paymentRequestDTO.BookingId);
+
+        if (booking == null)
+        {
+            return new PaymentResponse
+            {
+                Success = false,
+                ErrorCode = ErrorCodes.INVALID_BOOKING_ID,
+                Message = "No booking found with the provided id"
+            };
+        }
+
+        var paymentProcessor = _paymentProcessorFactory
+            .GetPaymentProcessor(paymentRequestDTO.SelectedPaymentProvider);
+
+        var response = await paymentProcessor.CapturePayment(paymentRequestDTO.PaymentIntention);
+
+        if (!response.Success)
+        {
+            return response;
+        }
+
+        booking.ChangeState(Domain.Booking.Enums.Action.Pay);
+
+        await booking.Save(_bookingRepository, _guestRepository, _roomRepository);
+
+        return ResponseFactory.Ok<PaymentResponse>(r =>
+        {
+            r.Data = response.Data;
+            r.Message = "Payment successfully processed";
+        });
+    }
+    catch (Exception ex)
+    {
+        var failure = BookingExceptionMapper.Map(ex);
+
+        return ResponseFactory.Fail<PaymentResponse>(failure);
+    }
+}
+```
+
+---
+
+### **8.5.5 BookingExceptionMapper**
+
+Agora todas as exceções do domínio são convertidas em:
+
+- `ErrorCode`
+- `Message`
+
+#### **8.5.5.1 Implementação**
+
+```csharp
+public static class BookingExceptionMapper
+{
+    public static FailureInfo Map(Exception ex)
+    {
+        return ex switch
+        {
+            MissingRequiredInformation => new FailureInfo
+            {
+                ErrorCode = ErrorCodes.MISSING_REQUIRED_INFORMATION_BOOKING,
+                Message = "Some required information for creating the booking was not provided"
+            },
+
+            InvalidBookingDatesException => new FailureInfo
+            {
+                ErrorCode = ErrorCodes.INVALID_DATES,
+                Message = "The provided booking dates are invalid"
+            },
+
+            ConflictingBookingException => new FailureInfo
+            {
+                ErrorCode = ErrorCodes.CONFLICTING_BOOKING,
+                Message = "The provided room is not available for the selected dates"
+            },
+
+            Domain.Guest.Exceptions.GuestExceptons => new FailureInfo
+            {
+                ErrorCode = ErrorCodes.INVALID_DATA_GUEST,
+                Message = "The provided guest has invalid data"
+            },
+
+            Domain.Room.Exceptions.RoomExceptions => new FailureInfo
+            {
+                ErrorCode = ErrorCodes.INVALID_DATA_ROOM,
+                Message = "The provided room has invalid data"
+            },
+
+            InvalidGuestIDException => new FailureInfo
+            {
+                ErrorCode = ErrorCodes.INVALID_GUEST_ID,
+                Message = "The provided guest has invalid data"
+            },
+
+            InvalidRoomIDException => new FailureInfo
+            {
+                ErrorCode = ErrorCodes.INVALID_ROOM_ID,
+                Message = "The provided room does not exist"
+            },
+
+            _ => new FailureInfo
+            {
+                ErrorCode = ErrorCodes.BOOKING_COULD_NOT_BE_CREATED,
+                Message = "An unexpected error occurred"
+            }
+        };
+    }
+}
+```
+
+---
+
+### **8.5.6 ResponseFactory**
+
+Simplifica a criação de respostas:
+
+#### **8.5.6.1 Implementação**
+
+```csharp
+public static class ResponseFactory
+{
+    public static T Fail<T>(FailureInfo failure)
+        where T : Response, new()
+    {
+        return new T
+        {
+            Success = false,
+            ErrorCode = failure.ErrorCode,
+            Message = failure.Message
+        };
+    }
+
+    public static T Ok<T>(Action<T> configure)
+        where T : Response, new()
+    {
+        var response = new T { Success = true };
+        configure(response);
+        return response;
+    }
+}
+```
+
+---
+
+### **8.5.7 Conclusão**
+
+Com a atualização do status do Booking:
+
+- O domínio agora controla transições de estado  
+- O repositório suporta atualizações  
+- O BookingManager integra pagamento + mudança de estado  
+- O sistema está pronto para:
+  - Cancelamento de reservas  
+  - Finalização de estadias  
+  - Reabertura de reservas  
+  - Reembolsos  
+
+A arquitetura continua:
+
+- Limpa  
+- Extensível  
+- Segura  
+- Testável  

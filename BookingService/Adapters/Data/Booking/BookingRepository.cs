@@ -36,4 +36,11 @@ public class BookingRepository : IBookingRepository
         .Include(b=> b.Room)
         .FirstOrDefaultAsync(b=> b.Id == id);
     }
+
+    public async Task Update(Domain.Booking.Entities.Booking booking)
+    {
+        _hotelDbContext.Bookings.Update(booking);
+        await _hotelDbContext.SaveChangesAsync(); 
+    }
+
 }
