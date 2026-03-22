@@ -1,4 +1,3 @@
-using System;
 using Application.Booking.DTOs;
 
 namespace Application.Booking.Requests;

@@ -3,8 +3,6 @@ using System.Text.Json.Serialization;
 using Application;
 using Application.Booking;
 using Application.Booking.Ports;
-using Application.MercadoPago;
-using Application.Payment;
 using Application.Payment.Ports;
 using Application.Ports;
 using Application.Room;
@@ -18,13 +16,17 @@ using Domain.Guest.Ports;
 using Domain.Room.Ports;
 using Microsoft.EntityFrameworkCore;
 using Payment.Application;
-
+using MediatR;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 
 builder.Services.AddControllers();
+builder.Services.AddMediatR(cfg =>
+{
+    cfg.RegisterServicesFromAssemblyContaining<BookingManager>();
+});
 
 #region automapper
 builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
@@ -70,7 +72,7 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-app.UseHttpsRedirection();
+// app.UseHttpsRedirection();
 
 app.UseAuthorization();
 

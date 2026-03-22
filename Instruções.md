@@ -4902,3 +4902,264 @@ A arquitetura continua:
 - Extensível  
 - Segura  
 - Testável  
+
+# 9 Introduzindo CQRS com MediatR
+## 9.1 CQRS Introdução
+
+### 9.1.1 Visão Geral  
+Command Query Responsibility Segregation (CQRS) é um padrão arquitetural que separa explicitamente operações de escrita (commands) das operações de leitura (queries). Essa separação permite otimizações independentes, maior clareza de responsabilidades e alinhamento com arquiteturas orientadas ao domínio e microserviços.
+
+### 9.1.2 Motivação  
+A unificação de leitura e escrita em um único modelo tende a gerar complexidade conforme o sistema cresce. CQRS propõe a divisão desses fluxos para:  
+- Reduzir acoplamento entre operações.  
+- Permitir modelos distintos para leitura e escrita.  
+- Facilitar escalabilidade horizontal.  
+- Melhorar performance em cenários de alta demanda.
+
+### 9.1.3 Relação com DDD e Arquitetura Hexagonal  
+CQRS se integra naturalmente ao DDD ao permitir que o modelo de escrita represente fielmente o domínio, enquanto o modelo de leitura pode ser otimizado para consultas.  
+Na Arquitetura Hexagonal, commands e queries são tratados como portas de entrada, enquanto handlers e repositórios atuam como adaptadores.
+
+### 9.1.4 Estrutura Conceitual  
+#### 9.1.4.1 Commands  
+Representam intenções de mudança de estado.  
+- São imperativos.  
+- Não retornam dados complexos.  
+- São processados por handlers específicos.
+
+#### 9.1.4.2 Queries  
+Representam solicitações de leitura.  
+- Não alteram estado.  
+- São idempotentes.  
+- Podem utilizar modelos de dados otimizados.
+
+### 9.1.5 Exemplo de Estrutura CQRS em C#  
+#### 9.1.5.1 Command  
+```csharp
+public record CriarClienteCommand(Guid ClienteId, string Nome) : IRequest<bool>;
+```
+
+#### 9.1.5.2 Command Handler  
+```csharp
+public class CriarClienteHandler : IRequestHandler<CriarClienteCommand, bool>
+{
+    private readonly IClienteRepository _repository;
+
+    public CriarClienteHandler(IClienteRepository repository)
+    {
+        _repository = repository;
+    }
+
+    public Task<bool> Handle(CriarClienteCommand request, CancellationToken cancellationToken)
+    {
+        var cliente = new Cliente(request.ClienteId, request.Nome);
+        _repository.Salvar(cliente);
+        return Task.FromResult(true);
+    }
+}
+```
+
+#### 9.1.5.3 Query  
+```csharp
+public record ObterClienteQuery(Guid ClienteId) : IRequest<ClienteDto>;
+```
+
+#### 9.1.5.4 Query Handler  
+```csharp
+public class ObterClienteHandler : IRequestHandler<ObterClienteQuery, ClienteDto>
+{
+    private readonly IClienteReadRepository _readRepository;
+
+    public ObterClienteHandler(IClienteReadRepository readRepository)
+    {
+        _readRepository = readRepository;
+    }
+
+    public Task<ClienteDto> Handle(ObterClienteQuery request, CancellationToken cancellationToken)
+    {
+        return _readRepository.ObterPorIdAsync(request.ClienteId);
+    }
+}
+```
+
+### 9.1.6 Comparação entre Modelo Tradicional e CQRS  
+| Critério | Modelo Tradicional | CQRS |
+|---------|--------------------|------|
+| Modelo de Dados | Único | Separado (leitura/escrita) |
+| Escalabilidade | Limitada | Independente por operação |
+| Complexidade | Centralizada | Distribuída e modular |
+| Performance | Geral | Otimizada por fluxo |
+
+### 9.1.7 Benefícios  
+- Redução de acoplamento entre leitura e escrita.  
+- Maior clareza de responsabilidades.  
+- Possibilidade de usar tecnologias distintas para cada lado.  
+- Facilita event sourcing, quando necessário.
+
+### 9.1.8 Considerações de Uso  
+CQRS não deve ser aplicado indiscriminadamente. É mais adequado quando:  
+- Há grande volume de leitura.  
+- O modelo de domínio é complexo.  
+- Há necessidade de escalabilidade independente.  
+- O sistema utiliza eventos de domínio ou event sourcing.
+
+### 9.1.9 Exemplo Prático de Fluxo  
+1. O cliente envia um comando CriarClienteCommand.  
+2. O handler valida e cria o agregado Cliente.  
+3. O repositório persiste o agregado.  
+4. Um evento de domínio pode ser disparado.  
+5. O lado de leitura atualiza sua projeção.  
+6. Consultas subsequentes utilizam o modelo otimizado de leitura.
+
+### 9.1.10 Conclusão  
+CQRS fornece uma separação clara entre operações de leitura e escrita, permitindo que cada fluxo evolua de forma independente. Em conjunto com DDD, Hexagonal Architecture e microserviços, o padrão contribui para sistemas mais escaláveis, organizados e alinhados ao domínio.
+
+## 9.2 Usando MediatR
+
+### 9.2.1 Introdução  
+MediatR é uma biblioteca que implementa o padrão Mediator, permitindo desacoplamento entre controladores, casos de uso e lógica de domínio. Em arquiteturas baseadas em CQRS, DDD e Hexagonal Architecture, MediatR atua como um ponto central para o envio de comandos e queries, eliminando dependências diretas entre camadas e facilitando testes, manutenção e extensibilidade.
+
+### 9.2.2 Instalação do Pacote  
+A instalação é realizada via CLI do .NET:
+
+```bash
+dotnet add package MediatR
+```
+
+Esse comando adiciona o pacote ao projeto, permitindo registrar handlers e enviar comandos e queries.
+
+### 9.2.3 Registro do MediatR no Container de Injeção de Dependência  
+O registro é feito no `Program.cs`, apontando para o assembly que contém os handlers:
+
+```csharp
+builder.Services.AddMediatR(cfg =>
+{
+    cfg.RegisterServicesFromAssemblyContaining<BookingManager>();
+});
+```
+
+Esse registro garante que todos os handlers localizados no assembly sejam automaticamente descobertos e registrados.
+
+### 9.2.4 Estrutura Arquitetural com MediatR  
+#### 9.2.4.1 Fluxo de Comando  
+1. Controller recebe a requisição.  
+2. Controller cria um comando.  
+3. Controller envia o comando via `IMediator`.  
+4. Handler processa o comando.  
+5. Handler delega a lógica ao caso de uso (Application Service).  
+6. Caso de uso interage com o domínio e repositórios.  
+7. Handler retorna a resposta ao controller.
+
+#### 9.2.4.2 Benefícios  
+- Redução de acoplamento entre camadas.  
+- Facilita testes unitários.  
+- Permite evolução modular de comandos e queries.  
+- Alinha-se ao padrão CQRS.
+
+### 9.2.5 Exemplo Completo de Uso do MediatR  
+A seguir, a estrutura apresentada no código fornecido é organizada e explicada tecnicamente.
+
+#### 9.2.5.1 Controller utilizando MediatR  
+```csharp
+[HttpPost]
+public async Task<ActionResult<ReturnBookingDTO>> Post(CreateBookingDTO booking)
+{
+    var request = new CreateBookingRequest { Data = booking };
+
+    var command = new CreateBookingComand
+    {
+        createBookingRequest = request
+    };
+
+    var res = await _mediator.Send(command);
+
+    if(res.Success) return Created("", res.Data);
+
+    if(
+        res.ErrorCode == ErrorCodes.INVALID_DATES || 
+        res.ErrorCode == ErrorCodes.MISSING_REQUIRED_INFORMATION || 
+        res.ErrorCode == ErrorCodes.INVALID_GUEST_ID ||
+        res.ErrorCode == ErrorCodes.INVALID_ROOM_ID ||
+        res.ErrorCode == ErrorCodes.COULD_NOT_STORE_DATA ||
+        res.ErrorCode == ErrorCodes.NOT_FOUND
+    )
+    {
+        return BadRequest(res);
+    }
+
+    _logger.LogError("Response with unknown ErrorCode Returned{@res}", res);
+    return StatusCode(StatusCodes.Status500InternalServerError, res);
+}
+```
+
+O controller não chama diretamente o caso de uso. Ele apenas cria o comando e o envia ao MediatR.
+
+#### 9.2.5.2 Definição do Command  
+```csharp
+public class CreateBookingComand : IRequest<BookingResponse>
+{
+    public CreateBookingRequest createBookingRequest { get; set; } = null!;
+}
+```
+
+O comando implementa `IRequest<T>`, indicando o tipo de retorno esperado.
+
+#### 9.2.5.3 Handler do Command  
+```csharp
+public class CreateBookingComandHandler : IRequestHandler<CreateBookingComand, BookingResponse>
+{
+    private IBookingManager _bookingManager;
+
+    public CreateBookingComandHandler(IBookingManager bookingManager)
+    {
+        _bookingManager = bookingManager;
+    }
+
+    public Task<BookingResponse> Handle(CreateBookingComand request, CancellationToken cancellationToken)
+    {
+        return _bookingManager.CreateBooking(request.createBookingRequest);
+    }
+}
+```
+
+O handler recebe o comando e delega a lógica ao caso de uso (`BookingManager`), mantendo o domínio isolado.
+
+### 9.2.6 Integração com DDD e Hexagonal Architecture  
+#### 9.2.6.1 Ports and Adapters  
+- O handler atua como um adapter de entrada.  
+- O caso de uso (`BookingManager`) é a porta de aplicação.  
+- Repositórios são adapters de saída.  
+
+Essa separação mantém o domínio independente de frameworks.
+
+#### 9.2.6.2 Vantagens no Contexto DDD  
+- Commands representam intenções do usuário.  
+- Handlers orquestram casos de uso.  
+- O domínio permanece puro e isolado.
+
+### 9.2.7 Comparação: Controller Chamando Serviço vs Controller Usando MediatR  
+| Critério | Sem MediatR | Com MediatR |
+|---------|--------------|-------------|
+| Acoplamento | Alto (controller → service) | Baixo (controller → mediator → handler) |
+| Testabilidade | Moderada | Alta |
+| Evolução | Difícil | Modular |
+| CQRS | Limitado | Naturalmente suportado |
+
+### 9.2.8 Boas Práticas ao Usar MediatR  
+- Commands devem ser simples e representar intenções.  
+- Handlers devem ser finos e delegar lógica ao caso de uso.  
+- Evitar colocar lógica de domínio dentro de handlers.  
+- Queries e commands devem ser separados.  
+- Evitar handlers que retornam tipos complexos desnecessariamente.
+
+### 9.2.9 Exemplo Prático de Fluxo Completo  
+1. Usuário envia requisição POST para criar reserva.  
+2. Controller cria `CreateBookingComand`.  
+3. Controller envia comando ao MediatR.  
+4. Handler recebe comando e chama `BookingManager`.  
+5. `BookingManager` valida, cria entidade e salva via repositórios.  
+6. Handler retorna `BookingResponse`.  
+7. Controller retorna `201 Created`.
+
+### 9.2.10 Conclusão  
+O uso de MediatR em conjunto com CQRS, DDD e Hexagonal Architecture promove desacoplamento, modularidade e clareza arquitetural. A separação entre comandos, handlers e casos de uso facilita manutenção, testes e evolução do sistema, mantendo o domínio isolado e aderente aos princípios SOLID.

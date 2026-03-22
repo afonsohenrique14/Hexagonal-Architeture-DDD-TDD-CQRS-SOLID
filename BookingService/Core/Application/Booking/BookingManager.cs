@@ -1,3 +1,4 @@
+using Application.Booking.Commands;
 using Application.Booking.DTOs;
 using Application.Booking.Mappings;
 using Application.Booking.Ports;
@@ -37,7 +38,6 @@ public class BookingManager : IBookingManager
     {
         try
         {
-
             var booking = _mapper.Map<Domain.Booking.Entities.Booking>(request.Data);
 
             await booking.Save(_bookingRepository
@@ -92,6 +92,16 @@ public class BookingManager : IBookingManager
                     Success = false,
                     ErrorCode = ErrorCodes.INVALID_BOOKING_ID,
                     Message = "No booking found with the provided id"
+                };
+            }
+
+            if (booking.CurrentStatus != Domain.Booking.Enums.Status.Created)
+            {
+                return new PaymentResponse
+                {
+                    Success = false,
+                    ErrorCode = ErrorCodes.DUPLICATED_PAYMENT,
+                    Message = "The current booking was already paid for."
                 };
             }
 

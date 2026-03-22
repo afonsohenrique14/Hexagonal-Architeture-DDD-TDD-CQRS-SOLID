@@ -7,6 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Folder Include="Booking\Commands\" />
     <Folder Include="Booking\Ports\" />
     <Folder Include="Booking\Requests\" />
     <Folder Include="Booking\Responses\" />
@@ -23,6 +24,7 @@
 
   <ItemGroup>
     <PackageReference Include="AutoMapper.Extensions.Microsoft.DependencyInjection" Version="12.0.1" />
+    <PackageReference Include="MediatR" Version="14.1.0" />
   </ItemGroup>
 
   <ItemGroup>

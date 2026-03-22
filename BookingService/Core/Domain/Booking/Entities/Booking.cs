@@ -73,7 +73,7 @@ public class Booking
             throw new InvalidRoomIDException();
         }
 
-        var hasConflictingBooking = await bookingRepository.ExistsActiveBookingForRoom(RoomId, Start, End);
+        var hasConflictingBooking = await bookingRepository.ExistsActiveBookingForRoom(Id, RoomId, Start, End);
         if (hasConflictingBooking){
             throw new ConflictingBookingException();
         }

@@ -56,9 +56,11 @@ public class BookingManagerTests
             .ReturnsAsync(_createdBookingId)
             .Callback<Booking>(booking =>
             {
+                 booking.Id = _createdBookingId; // ✅ IMPORTANTE
                 // Simula a "persistência" em um store in-memory
                 _store.Add(new Booking
                 {
+                    Id = booking.Id,            // ✅ AGORA O ID EXISTE
                     RoomId = booking.RoomId,
                     GuestId = booking.GuestId,
                     Start = booking.Start,
@@ -131,9 +133,10 @@ public class BookingManagerTests
             );
 
         _bookingRepo
-        .Setup(x => x.ExistsActiveBookingForRoom(It.IsAny<int>(), It.IsAny<DateTime>(), It.IsAny<DateTime>()))
-        .ReturnsAsync((int roomId, DateTime start, DateTime end) =>
+        .Setup(x => x.ExistsActiveBookingForRoom(It.IsAny<int>(),It.IsAny<int>(), It.IsAny<DateTime>(), It.IsAny<DateTime>()))
+        .ReturnsAsync((int bookingId, int roomId, DateTime start, DateTime end) =>
             _store.Any(b =>
+                b.Id != bookingId && 
                 b.RoomId == roomId &&
                 b.Start < end &&
                 b.End > start

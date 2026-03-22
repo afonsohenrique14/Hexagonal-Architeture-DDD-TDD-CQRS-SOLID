@@ -43,7 +43,8 @@ public enum ErrorCodes
 
     PAYMENT_PROVIDER_NOT_IMPLEMENTED = 302,
 
-    INVALID_BOOKING_ID = 303
+    INVALID_BOOKING_ID = 303,
+    DUPLICATED_PAYMENT = 304,
     #endregion
 }
 

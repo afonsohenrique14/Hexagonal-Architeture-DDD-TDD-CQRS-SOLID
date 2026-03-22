@@ -18,7 +18,7 @@ public class BookingRepository : IBookingRepository
         return booking.Id;
     }
 
-    public async Task<bool> ExistsActiveBookingForRoom(int roomId, DateTime start, DateTime end)
+    public async Task<bool> ExistsActiveBookingForRoom(int bookingId, int roomId, DateTime start, DateTime end)
     {
         return await _hotelDbContext.Bookings.AnyAsync(
             b=> b.RoomId == roomId &&
@@ -26,6 +26,7 @@ public class BookingRepository : IBookingRepository
                 b.End > start &&
                 b.Start < end 
             ) 
+            && b.Id != bookingId
         );
     }
 
