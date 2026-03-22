@@ -23,7 +23,7 @@ public class MercadoPagoTests
         Assert.That(provider, Is.TypeOf<MercadoPagoAdapter>());
     }
     [Test]
-    public async Task ShoudSucessfullyProcessPaymentAsync()
+    public async Task Shoud_Sucessfully_Process_Payment_Async()
     {
         var factory = new PaymentProcessorFactory();
 
@@ -41,7 +41,7 @@ public class MercadoPagoTests
     #endregion
     #region NEGATIVE TESTS
     [Test]
-    public async Task Should_Fail_When_Payment_Intention_String_Is_InvalidAsync()
+    public async Task Should_Fail_When_Payment_Intention_String_Is_Invalid_Async()
     {
         var factory = new PaymentProcessorFactory();
 

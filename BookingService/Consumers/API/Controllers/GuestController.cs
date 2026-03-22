@@ -1,7 +1,9 @@
 using Application;
+using Application.Guest.Commands;
 using Application.Guest.DTOs;
+using Application.Guest.Queries;
 using Application.Guest.Requests;
-using Application.Ports;
+using MediatR;
 using Microsoft.AspNetCore.Mvc;
 
 namespace API.Controllers;
@@ -12,23 +14,31 @@ public class GuestController: ControllerBase
 {
   
     private readonly ILogger<GuestController> _logger;
-    private readonly IGuestManager _guestManager;
+
+    private readonly IMediator _mediator;
 
     public GuestController(
         ILogger<GuestController> logger,
-        IGuestManager guestManager
+        IMediator mediator
         )
     {
         _logger = logger;
-        _guestManager = guestManager;
+        _mediator = mediator;
     }
 
     [HttpPost]
     public  async Task<ActionResult<ReturnGuestDTO>> Post(CreateGuestDTO guest)
     {
         var request = new CreateGuestRequest { Data = guest };
+
+        var command = new CreateGuestCommand
+        {
+            createGuestRequest = request
+        };
+
+        var res = await _mediator.Send(command);
         
-        var res = await _guestManager.CreateGuest(request);
+        // var res = await _guestManager.CreateGuest(request);
 
         if(res.Success) return Created("", res.Data);
 
@@ -50,8 +60,14 @@ public class GuestController: ControllerBase
 
     [HttpGet]
     public async Task<ActionResult<ReturnGuestDTO>> Get(int guestId)
-    {
-        var res = await _guestManager.GetGuest(guestId);
+    {   
+        var query = new GetGuestQuery
+        {
+            GuestId = guestId
+        };
+
+        var res = await _mediator.Send(query);
+        // var res = await _guestManager.GetGuest(guestId);
 
         if(res.Success) return Ok(res.Data);
 

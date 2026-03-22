@@ -48,6 +48,12 @@ public static class BookingExceptionMapper
                 Message = "The provided room does not exist"
             },
 
+            InvalidBookingStateException => new FailureInfo
+            {
+                    ErrorCode = ErrorCodes.DUPLICATED_PAYMENT,
+                    Message = ex.Message
+
+            },
             _ => new FailureInfo
             {
                 ErrorCode = ErrorCodes.BOOKING_COULD_NOT_BE_CREATED,

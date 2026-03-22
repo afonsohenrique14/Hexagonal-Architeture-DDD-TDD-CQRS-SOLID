@@ -1,8 +1,10 @@
 
 using Application;
+using Application.Room.Commands;
 using Application.Room.DTOs;
-using Application.Room.Ports;
+using Application.Room.Queries;
 using Application.Room.Requests;
+using MediatR;
 using Microsoft.AspNetCore.Mvc;
 
 namespace API.Controllers;
@@ -13,23 +15,30 @@ public class RoomController: ControllerBase
 {
 
     private readonly ILogger<RoomController> _logger;
-    private readonly IRoomManager _roomManager;
+    private readonly IMediator _mediator;
 
     public RoomController(
         ILogger<RoomController> logger,
-        IRoomManager roomManager
+        IMediator mediator
     )
     {
         _logger = logger;
-        _roomManager = roomManager;
+        _mediator = mediator;
     }
 
     [HttpPost]
     public async Task<ActionResult<ReturnRoomDTO>> Post(CreateRoomDTO room)
     {
-        var request = new CreateRoomRequest { Data = room };
 
-        var res = await _roomManager.CreateRoom(request);
+        var request = new CreateRoomRequest { Data = room };
+        var command = new CreateRoomCommand
+        {
+            createRoomRequest = request
+        };
+
+        var res = await _mediator.Send(command);
+
+        // var res = await _roomManager.CreateRoom(request);
 
         if (res.Success) return Created("", res.Data);
 
@@ -46,7 +55,13 @@ public class RoomController: ControllerBase
     [HttpGet]
         public async Task<ActionResult<ReturnRoomDTO>> Get(int roomId)
     {
-        var res = await _roomManager.GetRoom(roomId);
+        var query = new GetRoomQuery
+        {
+            roomId = roomId
+        };
+
+        var res = await _mediator.Send(query);
+        // var res = await _roomManager.GetRoom(roomId);
 
         if(res.Success) return Ok(res.Data);
 

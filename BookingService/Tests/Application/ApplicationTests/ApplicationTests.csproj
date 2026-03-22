@@ -25,4 +25,9 @@
     <Using Include="NUnit.Framework" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Guest\" />
+    <Folder Include="Room\" />
+  </ItemGroup>
+
 </Project>

@@ -9,15 +9,21 @@
   <ItemGroup>
     <Folder Include="Booking\Commands\" />
     <Folder Include="Booking\Ports\" />
+    <Folder Include="Booking\Queries\" />
     <Folder Include="Booking\Requests\" />
     <Folder Include="Booking\Responses\" />
+    <Folder Include="Guest\Commands\" />
     <Folder Include="Guest\DTOs\" />
     <Folder Include="Guest\Mappings\" />
+    <Folder Include="Guest\Ports\" />
+    <Folder Include="Guest\Queries\" />
     <Folder Include="Guest\Requests\" />
     <Folder Include="Guest\Responses\" />
     <Folder Include="Payment\DTOs\" />
     <Folder Include="Payment\Responses\" />
+    <Folder Include="Room\Commands\" />
     <Folder Include="Room\Ports\" />
+    <Folder Include="Room\Queries\" />
     <Folder Include="Room\Requests\" />
     <Folder Include="Room\Responses\" />
   </ItemGroup>

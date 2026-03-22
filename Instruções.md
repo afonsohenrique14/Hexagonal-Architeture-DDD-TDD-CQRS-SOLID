@@ -5163,3 +5163,132 @@ Essa separação mantém o domínio independente de frameworks.
 
 ### 9.2.10 Conclusão  
 O uso de MediatR em conjunto com CQRS, DDD e Hexagonal Architecture promove desacoplamento, modularidade e clareza arquitetural. A separação entre comandos, handlers e casos de uso facilita manutenção, testes e evolução do sistema, mantendo o domínio isolado e aderente aos princípios SOLID.
+
+
+## 9.3 MediatR Query
+
+### 9.3.1 Introdução  
+Queries representam operações de leitura dentro do padrão CQRS. Diferentemente dos comandos, queries não alteram o estado do sistema e são utilizadas exclusivamente para recuperar informações. MediatR fornece um mecanismo simples e desacoplado para enviar queries e receber respostas, mantendo a arquitetura limpa e alinhada aos princípios de DDD e Hexagonal Architecture.
+
+### 9.3.2 Estrutura de uma Query  
+Uma query deve:  
+- Representar uma intenção de leitura.  
+- Ser imutável sempre que possível.  
+- Implementar `IRequest<TResponse>`, onde `TResponse` é o tipo retornado.  
+- Ser tratada por um handler específico.
+
+### 9.3.3 Definição da Query  
+A seguir, a query utilizada para recuperar uma reserva:
+
+```csharp
+public class GetBookingQuery : IRequest<BookingResponse>
+{
+    public int bookingId { get; set; }
+}
+```
+
+Essa query encapsula apenas os dados necessários para a operação de leitura, mantendo simplicidade e clareza.
+
+### 9.3.4 Implementação do Query Handler  
+O handler é responsável por processar a query e retornar o resultado. Ele atua como um adapter de entrada na Arquitetura Hexagonal.
+
+```csharp
+public class GetBookingQueryHandler : IRequestHandler<GetBookingQuery, BookingResponse>
+{
+    private readonly IBookingRepository _bookingRepository;
+    private readonly IMapper _mapper;
+
+    public GetBookingQueryHandler(
+        IBookingRepository bookingRepository,
+        IMapper mapper
+    )
+    {
+        _bookingRepository = bookingRepository;
+        _mapper = mapper;
+    }
+
+    public async Task<BookingResponse> Handle(GetBookingQuery request, CancellationToken cancellationToken)
+    {
+        var guest = await _bookingRepository.Get(request.bookingId);
+
+        if (guest == null)
+        {
+            return new BookingResponse
+            {
+                Success = false,
+                ErrorCode = ErrorCodes.NOT_FOUND,
+                Message = "No booking found with the provided id"
+            };
+        }
+
+        return new BookingResponse
+        {
+            Data = _mapper.Map<ReturnBookingDTO>(guest),
+            Success = true,
+        };
+    }
+}
+```
+
+### 9.3.5 Fluxo Arquitetural da Query  
+#### 9.3.5.1 Etapas do Processo  
+1. O controller recebe a requisição HTTP GET.  
+2. O controller cria uma instância de `GetBookingQuery`.  
+3. O controller envia a query ao MediatR via `_mediator.Send(query)`.  
+4. MediatR identifica o handler correspondente.  
+5. O handler consulta o repositório.  
+6. O handler retorna um `BookingResponse`.  
+7. O controller retorna o resultado ao cliente.
+
+### 9.3.6 Uso da Query no Controller  
+O controller utiliza MediatR para enviar a query, mantendo baixo acoplamento:
+
+```csharp
+[HttpGet]
+public async Task<ActionResult<ReturnBookingDTO>> Get(int bookingId)
+{
+    var query = new GetBookingQuery
+    {
+        bookingId = bookingId
+    };
+
+    var res = await _mediator.Send(query);
+
+    if(res.Success) return Ok(res.Data);
+
+    if(res.ErrorCode == ErrorCodes.NOT_FOUND)
+    {
+        return NotFound(res);
+    }
+
+    _logger.LogError("Response with unknown ErrorCode Returned{@res}", res);
+    return StatusCode(StatusCodes.Status500InternalServerError, res);
+}
+```
+
+### 9.3.7 Comparação entre Query e Command  
+| Aspecto | Command | Query |
+|---------|---------|--------|
+| Finalidade | Alterar estado | Ler estado |
+| Idempotência | Não garantida | Garantida |
+| Retorno | Simples (bool, id) | Dados completos |
+| Handler | Executa lógica de negócio | Executa leitura otimizada |
+
+### 9.3.8 Boas Práticas para Queries  
+- Queries devem ser simples e diretas.  
+- Não incluir lógica de domínio no handler.  
+- Utilizar DTOs específicos para leitura.  
+- Evitar dependências desnecessárias no handler.  
+- Garantir que o repositório de leitura seja otimizado para consultas.
+
+### 9.3.9 Exemplo Prático de Fluxo Completo  
+1. Cliente chama `GET /booking?bookingId=10`.  
+2. Controller cria `GetBookingQuery`.  
+3. Controller envia a query ao MediatR.  
+4. Handler consulta o repositório.  
+5. Handler mapeia entidade para DTO.  
+6. Handler retorna `BookingResponse`.  
+7. Controller retorna `200 OK` com o DTO.
+
+### 9.3.10 Conclusão  
+A implementação de queries com MediatR reforça a separação entre leitura e escrita, característica essencial do CQRS. O uso de handlers dedicados, repositórios específicos e DTOs de leitura mantém o sistema modular, testável e alinhado aos princípios de DDD e Hexagonal Architecture.

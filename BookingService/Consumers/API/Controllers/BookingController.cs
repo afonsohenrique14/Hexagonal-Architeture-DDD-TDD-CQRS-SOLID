@@ -2,7 +2,7 @@
 using Application;
 using Application.Booking.Commands;
 using Application.Booking.DTOs;
-using Application.Booking.Ports;
+using Application.Booking.Queries;
 using Application.Booking.Requests;
 using Application.Payment.DTOs;
 using Application.Payment.Responses;
@@ -17,16 +17,14 @@ public class BookingController: ControllerBase
 {
 
     private readonly ILogger<BookingController> _logger;
-    private readonly IBookingManager _bookingManager;
+
     private readonly IMediator _mediator;
     public BookingController(
         ILogger<BookingController> logger,
-        IBookingManager bookingManager,
         IMediator mediator
     )
     {
         _logger = logger;
-        _bookingManager = bookingManager;
         _mediator = mediator;
     }
 
@@ -72,7 +70,14 @@ public class BookingController: ControllerBase
     {
         paymentRequestDTO.BookingId = bookingId;
 
-        var res = await _bookingManager.PayForABooking(paymentRequestDTO);
+        var command = new PayForABookingCommand
+        {
+            paymentRequestDTO = paymentRequestDTO
+        };
+
+        var res = await _mediator.Send(command);
+
+        // var res = await _bookingManager.PayForABooking(paymentRequestDTO);
 
         if (res.Success) return Ok(res.Data);
 
@@ -84,7 +89,12 @@ public class BookingController: ControllerBase
     [HttpGet]
     public async Task<ActionResult<ReturnBookingDTO>> Get(int bookingId)
     {
-        var res = await _bookingManager.GetBooking(bookingId);
+        var query = new GetBookingQuery
+        {
+            bookingId = bookingId   
+        };
+
+        var res = await _mediator.Send(query);
 
         if(res.Success) return Ok(res.Data);
 

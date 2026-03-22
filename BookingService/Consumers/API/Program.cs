@@ -1,12 +1,6 @@
 
 using System.Text.Json.Serialization;
-using Application;
-using Application.Booking;
-using Application.Booking.Ports;
 using Application.Payment.Ports;
-using Application.Ports;
-using Application.Room;
-using Application.Room.Ports;
 using Data;
 using Data.Booking;
 using Data.Guest;
@@ -17,6 +11,7 @@ using Domain.Room.Ports;
 using Microsoft.EntityFrameworkCore;
 using Payment.Application;
 using MediatR;
+using Application.Booking.Queries;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -25,7 +20,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddMediatR(cfg =>
 {
-    cfg.RegisterServicesFromAssemblyContaining<BookingManager>();
+    cfg.RegisterServicesFromAssemblyContaining<GetBookingQueryHandler>();
 });
 
 #region automapper
@@ -33,11 +28,8 @@ builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
 #endregion
 
 #region IoC
-builder.Services.AddScoped<IGuestManager, GuestManager>();
 builder.Services.AddScoped<IGuestRepository, GuestRepository>();
-builder.Services.AddScoped<IRoomManager, RoomManager>();
 builder.Services.AddScoped<IRoomRepository, RoomRepostory>();
-builder.Services.AddScoped<IBookingManager, BookingManager>();
 builder.Services.AddScoped<IBookingRepository, BookingRepository>();
 builder.Services.AddScoped<IPaymentProcessorFactory, PaymentProcessorFactory>();
 #endregion

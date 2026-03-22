@@ -37,8 +37,10 @@ public class Booking
             (Status.Created,    Action.Cancel)  => Status.Canceled,
             (Status.Paid,       Action.Finish)  => Status.Finished,
             (Status.Paid,       Action.Refound) => Status.Refounded,
-            (Status.Canceled,   Action.Reopen)  => Status.Created,
-            _ => Status
+            (Status.Canceled,   Action.Reopen)  => Status.Created, 
+            _ => throw new InvalidBookingStateException(
+                $"Cannot apply action '{action}' when booking is in status '{Status}'"
+            )
 
         };
     }
