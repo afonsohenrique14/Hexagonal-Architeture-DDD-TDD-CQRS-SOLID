@@ -203,45 +203,45 @@ public class PedidoTests
 ## 1.7 Conclusão  
 A combinação de Microserviços, Hexagonal Architecture, DDD, TDD, CQRS e SOLID fornece uma base arquitetural sólida para sistemas distribuídos escaláveis, testáveis e alinhados ao domínio. Essa abordagem promove evolução contínua, qualidade de código e clareza na modelagem do negócio.
 
-## 2 TDD
+# 2 TDD
 
-### 2.1 Introdução  
+## 2.1 Introdução  
 Test‑Driven Development (TDD) é uma prática de desenvolvimento que orienta a implementação de software por meio de testes automatizados escritos antes do código de produção. O objetivo é garantir qualidade, reduzir retrabalho, melhorar o design e promover segurança na evolução do sistema. Em arquiteturas modernas como Microserviços, Hexagonal Architecture, DDD, CQRS e SOLID, o TDD atua como um mecanismo essencial para manter o domínio isolado, testável e consistente.
 
-### 2.2 Conceitos Fundamentais  
-#### 2.2.1 Ciclo Red‑Green‑Refactor  
+## 2.2 Conceitos Fundamentais  
+### 2.2.1 Ciclo Red‑Green‑Refactor  
 O TDD segue um ciclo contínuo composto por três etapas:  
 - Red: escrever um teste que falha.  
 - Green: implementar o mínimo necessário para o teste passar.  
 - Refactor: melhorar o código mantendo todos os testes verdes.
 
-#### 2.2.2 Papel do TDD em Arquiteturas Hexagonais  
+### 2.2.2 Papel do TDD em Arquiteturas Hexagonais  
 O TDD reforça a separação entre domínio e infraestrutura, permitindo que o núcleo da aplicação seja testado sem dependências externas. Ports e Adapters facilitam a criação de testes isolados e previsíveis.
 
-#### 2.2.3 TDD e DDD  
+### 2.2.3 TDD e DDD  
 No contexto de DDD, o TDD garante que regras de negócio sejam validadas continuamente. Entidades, Value Objects e Domain Services tornam‑se altamente testáveis e livres de efeitos colaterais.
 
-#### 2.2.4 TDD e CQRS  
+### 2.2.4 TDD e CQRS  
 Commands e Queries podem ser testados separadamente, garantindo que cada operação siga seu fluxo específico. Handlers tornam‑se unidades claras de teste.
 
-#### 2.2.5 TDD e SOLID  
+### 2.2.5 TDD e SOLID  
 O TDD incentiva a aplicação dos princípios SOLID, especialmente Single Responsibility e Dependency Inversion, pois classes testáveis tendem a ser coesas e desacopladas.
 
-### 2.3 Estrutura de Testes  
-#### 2.3.1 Testes de Unidade  
+## 2.3 Estrutura de Testes  
+### 2.3.1 Testes de Unidade  
 Validam comportamentos isolados do domínio, sem dependências externas.
 
-#### 2.3.2 Testes de Integração  
+### 2.3.2 Testes de Integração  
 Validam a interação entre componentes, como repositórios e adaptadores.
 
-#### 2.3.3 Testes de Contrato  
+### 2.3.3 Testes de Contrato  
 Essenciais em microserviços para garantir compatibilidade entre serviços consumidores e provedores.
 
-#### 2.3.4 Testes End‑to‑End  
+### 2.3.4 Testes End‑to‑End  
 Simulam fluxos completos, garantindo que o sistema funcione como um todo.
 
-### 2.4 Sintaxe e Exemplos de Código  
-#### 2.4.1 Exemplo de Teste de Unidade  
+## 2.4 Sintaxe e Exemplos de Código  
+### 2.4.1 Exemplo de Teste de Unidade  
 ```csharp
 public class CalculadoraDescontosTests
 {
@@ -256,7 +256,7 @@ public class CalculadoraDescontosTests
 }
 ```
 
-#### 2.4.2 Implementação Mínima (Green)  
+### 2.4.2 Implementação Mínima (Green)  
 ```csharp
 public class CalculadoraDescontos
 {
@@ -267,7 +267,7 @@ public class CalculadoraDescontos
 }
 ```
 
-#### 2.4.3 Refatoração  
+### 2.4.3 Refatoração  
 ```csharp
 public class CalculadoraDescontos
 {
@@ -280,7 +280,7 @@ public class CalculadoraDescontos
 }
 ```
 
-#### 2.4.4 Testando Entidade de Domínio (DDD)  
+### 2.4.4 Testando Entidade de Domínio (DDD)  
 ```csharp
 public class PedidoTests
 {
@@ -295,7 +295,7 @@ public class PedidoTests
 }
 ```
 
-#### 2.4.5 Testando Handler CQRS  
+### 2.4.5 Testando Handler CQRS  
 ```csharp
 public class CriarPedidoHandlerTests
 {
@@ -313,8 +313,8 @@ public class CriarPedidoHandlerTests
 }
 ```
 
-### 2.5 Exemplos Práticos  
-#### 2.5.1 Fluxo Completo com TDD  
+## 2.5 Exemplos Práticos  
+### 2.5.1 Fluxo Completo com TDD  
 1. Criar teste para validar criação de pedido.  
 2. Implementar entidade Pedido com o mínimo necessário.  
 3. Criar teste para adicionar itens.  
@@ -323,7 +323,7 @@ public class CriarPedidoHandlerTests
 6. Implementar handler e repositório fake.  
 7. Refatorar mantendo todos os testes verdes.
 
-#### 2.5.2 Comparação: Desenvolvimento Tradicional vs TDD  
+### 2.5.2 Comparação: Desenvolvimento Tradicional vs TDD  
 | Aspecto | Tradicional | TDD |
 |--------|-------------|-----|
 | Ordem | Código → Teste | Teste → Código |
@@ -332,28 +332,28 @@ public class CriarPedidoHandlerTests
 | Cobertura | Baixa | Elevada |
 | Design | Reativo | Intencional |
 
-### 2.6 Boas Práticas  
-#### 2.6.1 Escrever Testes Claros  
+## 2.6 Boas Práticas  
+### 2.6.1 Escrever Testes Claros  
 - Nomear testes de forma descritiva.  
 - Testar apenas um comportamento por teste.
 
-#### 2.6.2 Evitar Dependências Externas  
+### 2.6.2 Evitar Dependências Externas  
 - Utilizar mocks, stubs e fakes.  
 - Não acessar banco de dados em testes de unidade.
 
-#### 2.6.3 Manter Testes Determinísticos  
+### 2.6.3 Manter Testes Determinísticos  
 - Evitar uso de datas e valores aleatórios sem controle.  
 - Garantir que testes sempre produzam o mesmo resultado.
 
-#### 2.6.4 Cobrir Regras de Negócio  
+### 2.6.4 Cobrir Regras de Negócio  
 - Priorizar testes do domínio.  
 - Validar invariantes e comportamentos críticos.
 
-#### 2.6.5 Refatorar com Segurança  
+### 2.6.5 Refatorar com Segurança  
 - Executar testes continuamente.  
 - Garantir que o domínio permaneça coeso e desacoplado.
 
-### 2.7 Conclusão  
+## 2.7 Conclusão  
 O TDD é uma prática essencial para garantir qualidade, previsibilidade e segurança no desenvolvimento de sistemas complexos. Em conjunto com Microserviços, Hexagonal Architecture, DDD, CQRS e SOLID, o TDD fortalece o design, reduz acoplamento e promove evolução sustentável do software.
 
 # 3 Preparação do Ambiente
@@ -4628,7 +4628,6 @@ A suíte de testes do microserviço Payment garante:
 - Factory funcionando como ponto único de criação  
 - Fallback seguro para provedores não implementados  
 - Comportamento previsível e robusto  
-
 Com isso, a Feature Payment está totalmente validada e pronta para integração com o restante do sistema.
 ---
 
@@ -5292,3 +5291,5 @@ public async Task<ActionResult<ReturnBookingDTO>> Get(int bookingId)
 
 ### 9.3.10 Conclusão  
 A implementação de queries com MediatR reforça a separação entre leitura e escrita, característica essencial do CQRS. O uso de handlers dedicados, repositórios específicos e DTOs de leitura mantém o sistema modular, testável e alinhado aos princípios de DDD e Hexagonal Architecture.
+
+
